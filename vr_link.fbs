@@ -1,0 +1,58 @@
+// Wire schema for the VR pose/input uplink (headset/Unreal -> simulation PC).
+//
+// Framing (the schema does NOT include it): each record on the TCP byte
+// stream is preceded by an 8-byte big-endian prefix:
+//
+//   magic  u32 = 0x56525331 ("VRS1")
+//   length u32 = size of the FlatBuffers payload in bytes
+//
+// See README.md for the full contract (coordinate conventions, joint order,
+// evolution rules).
+
+namespace robros.vr;
+
+// Fixed-size pose, stored inline. Position in meters, quaternion in wxyz
+// order, both expressed in the simulation world frame (Z-up, right-handed).
+struct Pose {
+  px: float;
+  py: float;
+  pz: float;
+  qw: float;
+  qx: float;
+  qy: float;
+  qz: float;
+  valid: bool;
+}
+
+// One hand controller's input state. Buttons are floats so analog values
+// (trigger/grip pressure) and binary buttons (0.0/1.0) share one shape.
+table ControllerInput {
+  trigger: float;
+  grip: float;
+  button_first: float;       // right controller: A, left controller: X
+  button_second: float;      // right controller: B, left controller: Y
+  button_thumbstick: float;  // thumbstick click
+  thumbstick_x: float;       // [-1, 1]
+  thumbstick_y: float;       // [-1, 1]
+}
+
+// One snapshot of VR tracking + controller input, sent at the tracking rate.
+// Always carries the full current state (never deltas/events) so a receiver
+// that keeps only the newest record loses nothing on packet drop.
+table VRState {
+  // Sender clock, informational.
+  timestamp_ns: ulong;
+
+  // Device-fused full-body skeleton: exactly 24 entries in the PICO/SMPL-X
+  // body order the GMR "xrobot" retargeting source consumes (see README.md).
+  body_joints: [Pose];
+
+  // Raw HMD pose for head teleoperation. Unlike body_joints, the receiver
+  // applies no retargeting convention adapter to this slot.
+  head: Pose;
+
+  left_input: ControllerInput;
+  right_input: ControllerInput;
+}
+
+root_type VRState;
