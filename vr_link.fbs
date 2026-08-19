@@ -36,6 +36,30 @@ table ControllerInput {
   thumbstick_y: float;       // [-1, 1]
 }
 
+// Hand-tracking keypoints for one hand, for finger teleoperation. The sender
+// transmits raw keypoints only; retargeting onto the robot hand happens on
+// the receiver.
+table HandState {
+  // Per-frame tracking flag. When false the receiver must not act on
+  // keypoints (hand-tracking runtimes keep serving stale last-known poses
+  // after tracking is lost, e.g. when the user grabs a controller).
+  tracked: bool;
+
+  // Hand-tracking wrist pose in the simulation world frame (same conventions
+  // as body_joints, but no retargeting convention adapter is applied). Sent
+  // explicitly because the body-tracking wrist in body_joints comes from a
+  // different runtime source and differs from the hand-tracking wrist by a
+  // per-hand yaw convention offset.
+  wrist: Pose;
+
+  // Exactly 26 entries in the OpenXR XR_EXT_hand_tracking joint order (see
+  // README.md). Poses are relative to the wrist keypoint, expressed in the
+  // wrist frame with the same axis handedness conversion as all other poses;
+  // entry 1 (the wrist itself) is therefore the identity pose. Each entry's
+  // `valid` mirrors the runtime's per-keypoint validity.
+  keypoints: [Pose];
+}
+
 // One snapshot of VR tracking + controller input, sent at the tracking rate.
 // Always carries the full current state (never deltas/events) so a receiver
 // that keeps only the newest record loses nothing on packet drop.
@@ -53,6 +77,12 @@ table VRState {
 
   left_input: ControllerInput;
   right_input: ControllerInput;
+
+  // Hand-tracking keypoints for finger teleoperation. Absent (null) when the
+  // sender build/device does not provide hand tracking; present with
+  // tracked=false when the hand is merely not tracked this frame.
+  left_hand: HandState;
+  right_hand: HandState;
 }
 
 root_type VRState;

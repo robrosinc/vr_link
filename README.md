@@ -43,6 +43,20 @@ per datagram, no resynchronization needed.
   orientation convention adapter to these joints.
 - `head` is the raw HMD pose for head teleoperation; **no** convention
   adapter is applied to it.
+- `left_hand`/`right_hand` carry hand-tracking keypoints for finger
+  teleoperation. `keypoints` holds exactly **26 entries** in the OpenXR
+  `XR_EXT_hand_tracking` joint order (`Palm`, `Wrist`, `Thumb_Metacarpal`,
+  `Thumb_Proximal`, `Thumb_Distal`, `Thumb_Tip`, then for each of
+  `Index`/`Middle`/`Ring`/`Little`: `Metacarpal`, `Proximal`, `Intermediate`,
+  `Distal`, `Tip`). Keypoint poses are **relative to the wrist keypoint**,
+  expressed in the wrist frame (entry 1 is the identity pose); the
+  world-frame anchor travels separately in `wrist`. `wrist` uses the
+  hand-tracking runtime's wrist, which differs from the body-tracking wrist
+  in `body_joints` by a per-hand yaw convention offset — receivers must not
+  assume the two agree. `tracked` is the per-frame tracking flag; when it is
+  false the keypoints are stale last-known poses and must not be acted on.
+  The receiver performs all retargeting onto the robot hand; the sender only
+  applies the axis handedness conversion.
 - `VRState` always carries the full current state (never deltas or edge
   events). Button presses are transmitted as levels (`0.0`/`1.0`, or analog
   in `[0, 1]`) in every record, so a latest-record-wins receiver loses
