@@ -1,10 +1,10 @@
 # vr_link_schema
 
 FlatBuffers wire contract for the VR pose/input uplink between the headset
-application (`vr_system`, Unreal, C++) and the simulation PC (`robros_lab`,
+application (`vr_system`, Unreal, C++) and the simulation PC (`hit-bench`,
 Python). This repository is the single source of truth for that contract:
-both consumers reference it as a git submodule and generate their language
-bindings from `vr_link.fbs`.
+both consumers reference it as a git submodule and use the pre-generated
+bindings committed under `generated/` — they never run `flatc` themselves.
 
 ## Channel layout
 
@@ -64,17 +64,22 @@ per datagram, no resynchronization needed.
 
 ## Code generation
 
-```bash
-# Python (robros_lab): single-file module, committed into the consumer repo
-flatc --python --gen-onefile -o <dest_dir> vr_link.fbs
+The bindings are committed in this repository and regenerated here only:
 
-# C++ (vr_system): header-only, generated in a pre-build step
-flatc --cpp -o <dest_dir> vr_link.fbs
+```bash
+scripts/generate.sh    # uses flatc on PATH, or FLATC=/path/to/flatc
 ```
 
-`flatc` comes from the conda-forge `flatbuffers` package or
-https://github.com/google/flatbuffers releases. Keep the flatc major version
-aligned with the runtime library version in each consumer.
+- `generated/cpp/vr_link_generated.h` — included by `vr_system` (header-only,
+  against its vendored flatbuffers C++ runtime).
+- `generated/python/vr_link_generated.py` — imported by `hit-bench` (against
+  the pip `flatbuffers` runtime).
+
+The script hard-fails unless flatc matches the pinned version (see
+`FLATC_VERSION` in `scripts/generate.sh`). Bumping flatc means bumping
+`vr_system`'s flatbuffers runtime submodule to the same tag in the same
+change — its generated header static_asserts the version — and keeping
+hit-bench's pip `flatbuffers` pin compatible.
 
 ## Schema evolution rules
 
@@ -85,5 +90,6 @@ aligned with the runtime library version in each consumer.
 - Old readers skip unknown fields; new readers get type defaults for fields
   old senders omit. Consumers pin this repo at a commit, so the
   "schema version" of a build is the submodule pin.
-- After changing `vr_link.fbs`, regenerate bindings in both consumer repos
-  and update their submodule pins together with the regenerated code.
+- After changing `vr_link.fbs`, run `scripts/generate.sh` and commit the
+  schema together with `generated/` in one commit, so pin = schema =
+  bindings always agree. Consumers then only bump their submodule pin.
