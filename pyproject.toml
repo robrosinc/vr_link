@@ -1,0 +1,21 @@
+# Exposes the committed Python binding (generated/python/vr_link_generated.py)
+# as an importable module. Consumers install it editable from their submodule
+# checkout (pip install -e <path-to-this-repo>), so bumping the submodule pin
+# is all it takes to pick up a new schema. The authoritative schema version is
+# the git commit (submodule pin), not the nominal version below.
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vr-link-schema"
+version = "1.0.0"
+description = "FlatBuffers wire contract for the VR pose/input uplink (Python binding)"
+requires-python = ">=3.8"
+# Runtime must stay compatible with the flatc that generated the binding
+# (see FLATC_VERSION in scripts/generate.sh).
+dependencies = ["flatbuffers>=24,<26"]
+
+[tool.setuptools]
+package-dir = {"" = "generated/python"}
+py-modules = ["vr_link_generated"]

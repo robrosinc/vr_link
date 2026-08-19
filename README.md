@@ -71,9 +71,13 @@ scripts/generate.sh    # uses flatc on PATH, or FLATC=/path/to/flatc
 ```
 
 - `generated/cpp/vr_link_generated.h` — included by `vr_system` (header-only,
-  against its vendored flatbuffers C++ runtime).
+  against its vendored flatbuffers C++ runtime; the consumer adds this repo's
+  `generated/cpp` to its include paths).
 - `generated/python/vr_link_generated.py` — imported by `hit-bench` (against
-  the pip `flatbuffers` runtime).
+  the pip `flatbuffers` runtime). The repo is pip-installable
+  (`pyproject.toml` exposes the module): consumers run
+  `pip install -e <submodule-path>` once in their environment setup and then
+  `import vr_link_generated`.
 
 The script hard-fails unless flatc matches the pinned version (see
 `FLATC_VERSION` in `scripts/generate.sh`). Bumping flatc means bumping
