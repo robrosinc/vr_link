@@ -83,6 +83,26 @@ table VRState {
   // tracked=false when the hand is merely not tracked this frame.
   left_hand: HandState;
   right_hand: HandState;
+
+  // Headset-UI recording toggle requests, as a monotonic counter (state, not
+  // an event: a one-frame pulse could be lost to the receiver's newest-only
+  // sampling). The receiver applies (new - last_seen) % 2 toggles and seeds
+  // last_seen from the first record of a connection.
+  record_toggle_count: uint;
+}
+
+// Downlink status record (simulation PC -> headset), carried on the VSTR
+// video channel (port 9100) as a codec=5 record. Framing, sequence and
+// timestamps come from the VSTR header; this table is the payload. Like
+// VRState it always carries full current state (never events), so a receiver
+// that keeps only the newest record loses nothing. Parse with
+// GetRoot<SimStatus> (root_type stays VRState).
+table SimStatus {
+  // Sender wall clock, informational.
+  timestamp_ns: ulong;
+
+  // Episode data recording is active on the simulation side.
+  recording: bool;
 }
 
 root_type VRState;

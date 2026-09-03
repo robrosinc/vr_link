@@ -10,8 +10,25 @@ bindings committed under `generated/` — they never run `flatc` themselves.
 
 | Port | Direction | Format | Owner |
 |------|-----------|--------|-------|
-| 9100 | sim -> headset (video) | legacy `VSTR` binary records | NOT this repo |
+| 9100 | sim -> headset (video) | legacy `VSTR` binary records; **codec=5 payload is this schema's `SimStatus`** | framing NOT this repo / codec=5 payload this repo |
 | 9101 | headset -> sim (pose/input) | **this schema** (`VRS1` framing), legacy `VPOS` v2 supported during migration | this repo |
+
+### Downlink status (`SimStatus`, VSTR codec=5)
+
+New structured downlink data rides the existing VSTR channel as codec=5
+records whose payload is the FlatBuffers table `robros.vr.SimStatus` (parse
+with `GetRoot<SimStatus>`; `root_type` stays `VRState`). Framing, sequence
+and timestamps come from the VSTR header. Like `VRState`, `SimStatus` always
+carries full current state, never events. Legacy fixed-layout records
+(codec=2 JSON, codec=3/4 pose) stay as they are; only new record types use
+this schema.
+
+### Recording toggle (`VRState.record_toggle_count`)
+
+Headset-UI recording toggle requests travel as a **monotonic counter**, not
+a one-frame pulse: receivers sample newest-only, so pulses can be lost. The
+receiver seeds `last_seen` from the first record of a connection and applies
+`(new - last_seen) % 2` toggles on change.
 
 ## Framing
 

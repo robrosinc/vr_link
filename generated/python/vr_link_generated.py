@@ -320,8 +320,15 @@ class VRState(object):
             return obj
         return None
 
+    # VRState
+    def RecordToggleCount(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(18))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
+        return 0
+
 def VRStateStart(builder):
-    builder.StartObject(7)
+    builder.StartObject(8)
 
 def VRStateAddTimestampNs(builder, timestampNs):
     builder.PrependUint64Slot(0, timestampNs, 0)
@@ -347,7 +354,56 @@ def VRStateAddLeftHand(builder, leftHand):
 def VRStateAddRightHand(builder, rightHand):
     builder.PrependUOffsetTRelativeSlot(6, flatbuffers.number_types.UOffsetTFlags.py_type(rightHand), 0)
 
+def VRStateAddRecordToggleCount(builder, recordToggleCount):
+    builder.PrependUint32Slot(7, recordToggleCount, 0)
+
 def VRStateEnd(builder):
+    return builder.EndObject()
+
+
+
+class SimStatus(object):
+    __slots__ = ['_tab']
+
+    @classmethod
+    def GetRootAs(cls, buf, offset=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
+        x = SimStatus()
+        x.Init(buf, n + offset)
+        return x
+
+    @classmethod
+    def GetRootAsSimStatus(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
+    # SimStatus
+    def Init(self, buf, pos):
+        self._tab = flatbuffers.table.Table(buf, pos)
+
+    # SimStatus
+    def TimestampNs(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # SimStatus
+    def Recording(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return False
+
+def SimStatusStart(builder):
+    builder.StartObject(2)
+
+def SimStatusAddTimestampNs(builder, timestampNs):
+    builder.PrependUint64Slot(0, timestampNs, 0)
+
+def SimStatusAddRecording(builder, recording):
+    builder.PrependBoolSlot(1, recording, 0)
+
+def SimStatusEnd(builder):
     return builder.EndObject()
 
 

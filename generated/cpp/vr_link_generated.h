@@ -27,6 +27,9 @@ struct HandStateBuilder;
 struct VRState;
 struct VRStateBuilder;
 
+struct SimStatus;
+struct SimStatusBuilder;
+
 FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) Pose FLATBUFFERS_FINAL_CLASS {
  private:
   float px_;
@@ -282,7 +285,8 @@ struct VRState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_LEFT_INPUT = 10,
     VT_RIGHT_INPUT = 12,
     VT_LEFT_HAND = 14,
-    VT_RIGHT_HAND = 16
+    VT_RIGHT_HAND = 16,
+    VT_RECORD_TOGGLE_COUNT = 18
   };
   uint64_t timestamp_ns() const {
     return GetField<uint64_t>(VT_TIMESTAMP_NS, 0);
@@ -305,6 +309,9 @@ struct VRState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const robros::vr::HandState *right_hand() const {
     return GetPointer<const robros::vr::HandState *>(VT_RIGHT_HAND);
   }
+  uint32_t record_toggle_count() const {
+    return GetField<uint32_t>(VT_RECORD_TOGGLE_COUNT, 0);
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -320,6 +327,7 @@ struct VRState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            verifier.VerifyTable(left_hand()) &&
            VerifyOffset(verifier, VT_RIGHT_HAND) &&
            verifier.VerifyTable(right_hand()) &&
+           VerifyField<uint32_t>(verifier, VT_RECORD_TOGGLE_COUNT, 4) &&
            verifier.EndTable();
   }
 };
@@ -349,6 +357,9 @@ struct VRStateBuilder {
   void add_right_hand(::flatbuffers::Offset<robros::vr::HandState> right_hand) {
     fbb_.AddOffset(VRState::VT_RIGHT_HAND, right_hand);
   }
+  void add_record_toggle_count(uint32_t record_toggle_count) {
+    fbb_.AddElement<uint32_t>(VRState::VT_RECORD_TOGGLE_COUNT, record_toggle_count, 0);
+  }
   explicit VRStateBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -368,9 +379,11 @@ inline ::flatbuffers::Offset<VRState> CreateVRState(
     ::flatbuffers::Offset<robros::vr::ControllerInput> left_input = 0,
     ::flatbuffers::Offset<robros::vr::ControllerInput> right_input = 0,
     ::flatbuffers::Offset<robros::vr::HandState> left_hand = 0,
-    ::flatbuffers::Offset<robros::vr::HandState> right_hand = 0) {
+    ::flatbuffers::Offset<robros::vr::HandState> right_hand = 0,
+    uint32_t record_toggle_count = 0) {
   VRStateBuilder builder_(_fbb);
   builder_.add_timestamp_ns(timestamp_ns);
+  builder_.add_record_toggle_count(record_toggle_count);
   builder_.add_right_hand(right_hand);
   builder_.add_left_hand(left_hand);
   builder_.add_right_input(right_input);
@@ -388,7 +401,8 @@ inline ::flatbuffers::Offset<VRState> CreateVRStateDirect(
     ::flatbuffers::Offset<robros::vr::ControllerInput> left_input = 0,
     ::flatbuffers::Offset<robros::vr::ControllerInput> right_input = 0,
     ::flatbuffers::Offset<robros::vr::HandState> left_hand = 0,
-    ::flatbuffers::Offset<robros::vr::HandState> right_hand = 0) {
+    ::flatbuffers::Offset<robros::vr::HandState> right_hand = 0,
+    uint32_t record_toggle_count = 0) {
   auto body_joints__ = body_joints ? _fbb.CreateVectorOfStructs<robros::vr::Pose>(*body_joints) : 0;
   return robros::vr::CreateVRState(
       _fbb,
@@ -398,7 +412,60 @@ inline ::flatbuffers::Offset<VRState> CreateVRStateDirect(
       left_input,
       right_input,
       left_hand,
-      right_hand);
+      right_hand,
+      record_toggle_count);
+}
+
+struct SimStatus FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef SimStatusBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_TIMESTAMP_NS = 4,
+    VT_RECORDING = 6
+  };
+  uint64_t timestamp_ns() const {
+    return GetField<uint64_t>(VT_TIMESTAMP_NS, 0);
+  }
+  bool recording() const {
+    return GetField<uint8_t>(VT_RECORDING, 0) != 0;
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint64_t>(verifier, VT_TIMESTAMP_NS, 8) &&
+           VerifyField<uint8_t>(verifier, VT_RECORDING, 1) &&
+           verifier.EndTable();
+  }
+};
+
+struct SimStatusBuilder {
+  typedef SimStatus Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_timestamp_ns(uint64_t timestamp_ns) {
+    fbb_.AddElement<uint64_t>(SimStatus::VT_TIMESTAMP_NS, timestamp_ns, 0);
+  }
+  void add_recording(bool recording) {
+    fbb_.AddElement<uint8_t>(SimStatus::VT_RECORDING, static_cast<uint8_t>(recording), 0);
+  }
+  explicit SimStatusBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<SimStatus> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<SimStatus>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<SimStatus> CreateSimStatus(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint64_t timestamp_ns = 0,
+    bool recording = false) {
+  SimStatusBuilder builder_(_fbb);
+  builder_.add_timestamp_ns(timestamp_ns);
+  builder_.add_recording(recording);
+  return builder_.Finish();
 }
 
 inline const robros::vr::VRState *GetVRState(const void *buf) {
