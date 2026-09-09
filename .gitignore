@@ -49,5 +49,7 @@ Thumbs.db
 *.wmv
 
 
-# Python packaging artifacts (pip install -e)
+# Python packaging artifacts (pip install -e) and test caches
 *.egg-info/
+__pycache__/
+.pytest_cache/

@@ -1,8 +1,11 @@
 # Exposes the committed Python binding (generated/python/vr_link_generated.py)
-# as an importable module. Consumers install it editable from their submodule
-# checkout (pip install -e <path-to-this-repo>), so bumping the submodule pin
-# is all it takes to pick up a new schema. The authoritative schema version is
-# the git commit (submodule pin), not the nominal version below.
+# and the hand-written VRS1 receiver package (python/vr_link) as importables.
+# Consumers install editable from their submodule checkout
+# (pip install -e <path-to-this-repo>) and must re-run that install after
+# pulling a pin that changes this file (with two package roots the editable
+# install uses a package finder instead of a .pth path entry). The
+# authoritative schema version is the git commit (submodule pin), not the
+# nominal version below.
 [build-system]
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
@@ -10,12 +13,16 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "vr-link-schema"
 version = "1.0.0"
-description = "FlatBuffers wire contract for the VR pose/input uplink (Python binding)"
-requires-python = ">=3.8"
+description = "FlatBuffers wire contract for the VR pose/input uplink (Python binding + VRS1 receiver)"
+# The receiver package evaluates tuple[...] type aliases at import time (3.9+).
+requires-python = ">=3.9"
 # Runtime must stay compatible with the flatc that generated the binding
 # (see FLATC_VERSION in scripts/generate.sh).
 dependencies = ["flatbuffers>=24,<26"]
 
 [tool.setuptools]
-package-dir = {"" = "generated/python"}
+# Two import roots: flatc output stays a flat module under generated/python;
+# the hand-written receiver package lives under python/vr_link.
+package-dir = {"" = "generated/python", "vr_link" = "python/vr_link"}
 py-modules = ["vr_link_generated"]
+packages = ["vr_link"]
