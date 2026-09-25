@@ -13,7 +13,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "vr-link-schema"
 version = "1.0.0"
-description = "FlatBuffers wire contract for the VR pose/input uplink (Python binding + VRS1 receiver)"
+description = "VR wire contract, pose receiver, video transport, and H.264 encoding"
 # The receiver package evaluates tuple[...] type aliases at import time (3.9+).
 requires-python = ">=3.9"
 # Runtime must stay compatible with the flatc that generated the binding

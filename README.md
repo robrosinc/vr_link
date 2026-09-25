@@ -113,7 +113,7 @@ The script hard-fails unless flatc matches the pinned version (see
 change — its generated header static_asserts the version — and keeping
 hit-bench's pip `flatbuffers` pin compatible.
 
-## Python receiver package (`vr_link`)
+## Python transport package (`vr_link`)
 
 Hand-written code under `python/vr_link/` (never under `generated/`):
 
@@ -128,6 +128,12 @@ Hand-written code under `python/vr_link/` (never under `generated/`):
   resynchronizing on the magic and keeping only the newest record;
   `advance(dt)` never blocks and reports `connected=False` when no fresh
   record exists.
+
+- `vr_link.stream_server` — nonblocking VSTR video downlink, camera parameters,
+  rendered head/base poses, and FlatBuffers simulation status records.
+- `vr_link.transport` — video transport interface.
+- `vr_link.h264_encoder` — stereo/SBS H.264 encoding through system `ffmpeg`.
+  Importing the package does not start an encoder or require a simulator.
 
 Convention adapter contract: `body_joint_adapter` is a
 `Callable[[str, Quat], Quat]` called once per body joint, in
