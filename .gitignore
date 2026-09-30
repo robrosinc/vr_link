@@ -53,3 +53,8 @@ Thumbs.db
 *.egg-info/
 __pycache__/
 .pytest_cache/
+.pixi/
+
+# Measured/generated stereo calibration data: per-robot measurements, kept
+# local until they move to per-robot deployment configs.
+src/vr_link/data/calibration/

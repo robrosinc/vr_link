@@ -1,24 +1,27 @@
 # vr_link_schema
 
-FlatBuffers wire contract for the VR pose/input uplink between the headset
-application (`vr_system`, Unreal, C++) and the PC side (`hit-bench` simulator
-and the real-robot producer, Python). This repository is the single source of
+Wire contract and Python sender/receiver code for the link between the
+headset application (`vr_system`, Unreal, C++) and the PC side (Isaac Sim in
+`hit-bench`, MuJoCo, the real robot). This repository is the single source of
 truth for that contract: consumers reference it as a git submodule and use
-the pre-generated bindings committed under `generated/` — they never run
-`flatc` themselves. It also ships the Python receiver package `vr_link`
-(framing, record builder/decoder, TCP server-side device), see below.
+the pre-generated FlatBuffers bindings committed under `generated/` — they
+never run `flatc` themselves. It also ships the Python package `vr_link`:
+the VRS1 pose receiver, the VSTR video sender (server, H.264 encoder, frame
+sources, standalone stream pump) and the stereo calibration tools.
 
 ## Channel layout
 
-| Port | Direction | Format | Owner |
-|------|-----------|--------|-------|
-| 9100 | PC -> headset (video) | legacy `VSTR` binary records; **codec=5 payload is this schema's `SimStatus`** | framing NOT this repo / codec=5 payload this repo |
-| 9101 | PC -> headset (calibration JSON, real robot only) | not this repo | robot camera server |
-| 9102 | headset -> PC (pose/input) | **this schema** (`VRS1` framing) | this repo |
+| Port | Direction | Format | Code |
+|------|-----------|--------|------|
+| 9100 | PC -> headset (video + records) | `VSTR` 48-byte header + payload (`vr_link.wire`); codec=1 H.264, 2 camera params JSON, 3/4 head/base pose, 5 `SimStatus` (this schema) | `vr_link.stream_server` |
+| 9101 | PC -> headset (calibration JSON, on request) | `GET_CALIBRATION\n` -> JSON (`vr_link.calibration.schema`) | `vr_link.calibration.server` |
+| 9102 | headset -> PC (pose/input) | **this schema** (`VRS1` framing) | `vr_link.tcp_device` |
 
 Port plan since 2026-09-09: the pose uplink moved from 9101 to 9102 so the
-same port works for the simulator and the real robot, where 9101 is already
-the calibration channel.
+same port works for the simulator and the real robot. Since 2026-09-29 the
+simulators also answer on 9101, with an *ideal* calibration computed from
+their live camera model, so the headset's calibration page works for every
+target.
 
 ### Downlink status (`SimStatus`, VSTR codec=5)
 
@@ -37,7 +40,7 @@ a one-frame pulse: receivers sample newest-only, so pulses can be lost. The
 receiver seeds `last_seen` from the first record of a connection and applies
 `(new - last_seen) % 2` toggles on change.
 
-## Framing
+## Framing (VRS1)
 
 FlatBuffers messages carry no length, so each record on the TCP byte stream
 is preceded by an 8-byte big-endian prefix:
@@ -87,6 +90,26 @@ per datagram, no resynchronization needed.
   events). Button presses are transmitted as levels (`0.0`/`1.0`, or analog
   in `[0, 1]`) in every record, so a latest-record-wins receiver loses
   nothing when packets drop.
+- Video frames are side-by-side stereo with the **right eye in the left
+  half** (the hardware camera's `left_half: right` order); every sender
+  (Isaac, MuJoCo, USB, DDS) reproduces it.
+
+## Calibration contract (port 9101 / codec=2)
+
+```json
+{"image_width": 640, "image_height": 480,
+ "left":  {"fx": .., "fy": .., "cx": .., "cy": .., "k1": .., "k2": .., "k3": .., "k4": .., "r": [9 floats]},
+ "right": {...}}
+```
+
+Per-eye pinhole intrinsics in per-eye pixels, OpenCV **fisheye** coefficients
+`k1..k4`, and the `stereoRectify` R1/R2 rotation (eye optical frame -> mid
+frame, row-major). The receiver's screen shader always applies the fisheye
+model, so a simulated pinhole camera is sent as the Taylor series of
+tan(theta) (`k = 1/3, 2/15, 17/315, 62/2835`), never as zeros. Measured
+hardware calibrations come from `vr-link-calibrate-cams`; simulators compute
+theirs at request time (`vr_link.calibration.ideal`). The flat YAML file
+format (`left_fx: ...`) is the on-disk form of the same data.
 
 ## Code generation
 
@@ -100,40 +123,89 @@ scripts/generate.sh    # uses flatc on PATH, or FLATC=/path/to/flatc
   against its vendored flatbuffers C++ runtime; the consumer adds this repo's
   `generated/cpp` to its include paths).
 - `generated/python/vr_link_generated.py` — the flatc Python binding (against
-  the pip `flatbuffers` runtime). The repo is pip-installable
-  (`pyproject.toml` exposes this module and the `vr_link` package): consumers
-  run `pip install -e <submodule-path>` once in their environment setup and
-  then `import vr_link_generated` / `import vr_link`. Re-run the install after
-  pulling a pin that changes `pyproject.toml` (the editable layout changed
-  when `vr_link` was added).
+  the pip `flatbuffers` runtime), exposed as the flat module
+  `vr_link_generated` by `pyproject.toml`.
 
 The script hard-fails unless flatc matches the pinned version (see
 `FLATC_VERSION` in `scripts/generate.sh`). Bumping flatc means bumping
 `vr_system`'s flatbuffers runtime submodule to the same tag in the same
 change — its generated header static_asserts the version — and keeping
-hit-bench's pip `flatbuffers` pin compatible.
+consumers' pip `flatbuffers` pin compatible.
 
-## Python transport package (`vr_link`)
+## Python package (`vr_link`)
 
-Hand-written code under `python/vr_link/` (never under `generated/`):
+Hand-written code under `src/vr_link/` (never under `generated/`). The base
+install needs only `flatbuffers` and `numpy`; everything heavier is an
+optional extra and is imported lazily by the module that needs it:
 
-- `vr_link.types` — decoded data model (`TrackedPose`, `ControllerInput`,
-  `HandTrackingState`, `VRInputState`), the `VRDevice` interface, and the
-  wire joint order `BODY_JOINT_NAMES` (alias `XROBOT_BODY_JOINT_NAMES`).
-- `vr_link.tcp_device` — `VRS1_*` framing constants,
-  `build_vr_state_record(...)` (test/sender-side packer),
+| Extra | Pulls in | Enables |
+|---|---|---|
+| `video` | PyAV | `vr_link.encoder`, `vr_link.pump`, `vr-link-stream` |
+| `yaml` | pyyaml | calibration YAML files, stream configs |
+| `calibration` | OpenCV, pyyaml | `vr-link-capture-checkerboard`, `vr-link-calibrate-cams` |
+| `dds` | (documentation only) | `vr_link.sources.dds` needs the workspace `igris_c_sdk` Python binding (py3.12 build, not pip-installable): install it in the consumer environment or set `IGRIS_C_SDK_ROOT` |
+
+Consumers install editable from their submodule checkout (`pip install -e
+<path>[video]`, or a uv/pixi path source) and re-run that install after
+pulling a pin that changes `pyproject.toml`.
+
+Modules:
+
+- `vr_link.types`, `vr_link.tcp_device` — VRS1 uplink: decoded data model,
+  the `VRDevice` interface, framing constants, `build_vr_state_record`,
   `decode_vr_state_payload(payload, *, timestamp, body_joint_adapter=None)`,
   and `TcpVRDevice(host="0.0.0.0", port=9102, stale_timeout=0.5,
   body_joint_adapter=None)`: a TCP server accepting one headset at a time,
   resynchronizing on the magic and keeping only the newest record;
   `advance(dt)` never blocks and reports `connected=False` when no fresh
   record exists.
-
-- `vr_link.stream_server` — nonblocking VSTR video downlink, camera parameters,
-  rendered head/base poses, and FlatBuffers simulation status records.
-- `vr_link.transport` — video transport interface.
-- `vr_link.h264_encoder` — stereo/SBS H.264 encoding through system `ffmpeg`.
-  Importing the package does not start an encoder or require a simulator.
+- `vr_link.wire` — the VSTR header (`build_header`, `parse_header`, codec
+  and flag constants) and `build_sim_status_payload`.
+- `vr_link.stream_server` — `VstrTcpStreamServer`: non-blocking VSTR
+  downlink (one headset at a time, per-connection writer queue, drops delta
+  frames until a fresh connection's first IDR, disconnects a receiver that
+  falls too far behind), camera parameters (codec=2), rendered head/base poses
+  (codec=3/4) and `SimStatus` (codec=5) records. `vr_link.transport` is the
+  transport interface.
+- `vr_link.encoder` — `H264Encoder` (PyAV, Annex-B, one access unit per
+  frame, SPS/PPS repeated on every IDR, `request_keyframe()` for new
+  connections), `EncoderWorker` (worker thread that drops *unencoded* frames
+  under back-pressure, for callers that must not pay encode time such as the
+  Isaac control loop) and `resolve_h264_encoder(name)` (probe + libx264
+  fallback; `libx264`, `h264_nvenc`, `h264_vaapi`, `h264_qsv` where the
+  PyAV build and the host driver provide them).
+- `vr_link.calibration` — `schema` (JSON contract, validation, tan-series
+  `TAN_SERIES_K`), `ideal` (ideal stereo calibration from a rig description
+  or from live camera intrinsics/poses, MuJoCo metadata adapter), `yaml_io`
+  (flat YAML read/write), `server` (`CalibrationServer(provider, port=9101)`
+  answering `GET_CALIBRATION` from a provider callable evaluated per request;
+  providers: `yaml_file_provider`, `json_file_provider`, `static_provider`,
+  `LatestValueProvider`).
+- `vr_link.sources` — `Frame`, `StereoCameraMetadata`, the `FrameSource`
+  protocol, and the sources `usb.UsbStereoSource` (V4L2/OpenCV, hardware tone
+  tuning in `v4l2`), `mujoco_shm.MujocoShmSource` (igris_c_mujoco vision
+  segment, seqlock reader, layout v1 and v2 with per-eye camera metadata),
+  `dds.DdsStereoSource` (robot JPEG topic via igris_c_sdk).
+- `vr_link.pump`, `vr_link.config`, `vr_link.cli.stream` — the standalone
+  sender: `vr-link-stream --source usb|dds|mujoco [--config ...]` reads a
+  `stream_*.yaml` (packaged defaults under `vr_link/data/configs/`), runs
+  source -> encoder -> `VstrTcpStreamServer`, and serves calibration on 9101
+  from `calibration.provider`: `yaml`/`json` (measured file, the real
+  robot), `ideal_from_source` (MuJoCo segment metadata) or
+  `ideal_from_config` (fovy/toe-out/baseline from the config).
+- `vr_link.tools` — `vr-link-capture-checkerboard --source usb|dds
+  --output-dir <dir>` and `vr-link-calibrate-cams --input-dir <captures>
+  --output-dir <dir>` (fisheye or pinhole stereo calibration; writes the
+  OpenCV FileStorage YAML, the flat Unreal YAML and the rectification maps).
+  `vr-link-make-calibration` writes the ideal YAML of a simulated rig.
+- `vr_link.data` — packaged configs (`configs/*.yaml`, tracked) and the
+  calibration data directory `calibration/` (**git-ignored, local**):
+  `igris_c_eyes_stereo_unreal.yaml` is the measured hardware calibration the
+  USB/DDS senders serve by default, `mujoco_stereo_calibration.yaml` the
+  generated ideal model. A fresh checkout has neither: run
+  `vr-link-calibrate-cams` (or copy the robot's file) and
+  `vr-link-make-calibration --output src/vr_link/data/calibration/mujoco_stereo_calibration.yaml`.
+  Tests that read these files skip when they are absent.
 
 Convention adapter contract: `body_joint_adapter` is a
 `Callable[[str, Quat], Quat]` called once per body joint, in
@@ -144,11 +216,32 @@ wire values. The adapter is the consumer's calibration, not part of this
 contract: hit-bench binds GMR's
 `general_motion_retargeting.vr_uplink_convention.to_xrobot_convention`.
 
-Tests (any environment with `flatbuffers` and `pytest`):
+### Standalone use (pixi)
 
 ```bash
-python -m pytest tests -q
+pixi install                       # default env: video + calibration + test
+pixi run test                      # pytest (loopback and temp-file tests, no hardware)
+pixi run mujoco-tcp-stream         # vr-link-stream --source mujoco
+pixi run camera-tcp-stream         # vr-link-stream --source usb
+pixi run jetson-tcp-stream         # vr-link-stream --source dds (igris_c_sdk required)
+pixi run capture-checkerboard -- --output-dir captures
+pixi run calibrate-cams -- --captures-root captures --output-dir calibration_out
+pixi run make-mujoco-calibration -- --output mujoco_stereo_calibration.yaml
 ```
+
+The conda-forge ffmpeg behind PyAV in this environment provides libx264,
+h264_nvenc, h264_vaapi and h264_qsv; hardware encoders still need the host
+driver at runtime. The pip PyAV wheel used by hit-bench provides libx264 only.
+
+### MuJoCo vision segment
+
+`igris_c_mujoco` renders `Left_Eye`/`Right_Eye` side by side into the POSIX
+segment `/dev/shm/igris_c_mujoco_vision_shm` under a seqlock
+(`igris_c_mujoco/include/igris_c_mujoco/vision_shm.h`). Layout v2 (128-byte
+header) carries the per-eye camera model (fovy, pose in the parent body,
+baseline, eye size) so `vr-link-stream --source mujoco` computes the ideal
+calibration on request; a v1 producer (64-byte header) still streams, with
+the calibration taken from the config's `ideal` section instead.
 
 ## Schema evolution rules
 

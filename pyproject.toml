@@ -1,28 +1,116 @@
 # Exposes the committed Python binding (generated/python/vr_link_generated.py)
-# and the hand-written VRS1 receiver package (python/vr_link) as importables.
+# and the hand-written package (src/vr_link) as importables.
+#
 # Consumers install editable from their submodule checkout
-# (pip install -e <path-to-this-repo>) and must re-run that install after
-# pulling a pin that changes this file (with two package roots the editable
-# install uses a package finder instead of a .pth path entry). The
-# authoritative schema version is the git commit (submodule pin), not the
-# nominal version below.
+# (pip install -e <path-to-this-repo>[video] / uv path source) and must re-run
+# that install after pulling a pin that changes this file (with two package
+# roots the editable install uses a package finder instead of a .pth path
+# entry). The authoritative schema version is the git commit (submodule pin),
+# not the nominal version below.
+#
+# Optional extras keep `import vr_link` dependency-light (flatbuffers + numpy):
+#   video        H.264 encoding + the standalone stream pump (PyAV)
+#   yaml         YAML calibration files / stream configs
+#   calibration  checkerboard capture + stereo calibration tools (OpenCV)
+#   dds          Jetson DDS frame source. Needs the workspace igris_c_sdk
+#                Python binding (py3.12 build, not pip-installable): install
+#                it in the consumer environment or set IGRIS_C_SDK_ROOT.
+#   dev          pytest
+#
+# Standalone use (streamers, calibration tools) is pixi-managed: `pixi run
+# mujoco-tcp-stream`, `pixi run test`, see [tool.pixi.*] below.
 [build-system]
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "vr-link-schema"
-version = "1.0.0"
-description = "VR wire contract, pose receiver, video transport, and H.264 encoding"
+version = "1.1.0"
+description = "VR wire contract, pose receiver, video transport, H.264 encoding, camera stream sources and stereo calibration"
 # The receiver package evaluates tuple[...] type aliases at import time (3.9+).
 requires-python = ">=3.9"
 # Runtime must stay compatible with the flatc that generated the binding
 # (see FLATC_VERSION in scripts/generate.sh).
-dependencies = ["flatbuffers>=24,<26"]
+dependencies = ["flatbuffers>=24,<26", "numpy>=1.24"]
+
+[project.optional-dependencies]
+video = ["av>=13,<18"]
+yaml = ["pyyaml>=6"]
+calibration = ["opencv-python-headless>=4.8", "pyyaml>=6"]
+dds = []
+dev = ["pytest>=8"]
+
+[project.scripts]
+vr-link-stream = "vr_link.cli.stream:main"
+vr-link-make-calibration = "vr_link.cli.make_calibration:main"
+vr-link-calibration-fov = "vr_link.cli.calibration_fov:main"
+vr-link-capture-checkerboard = "vr_link.tools.capture_checkerboard:main"
+vr-link-calibrate-cams = "vr_link.tools.calibrate_cams:main"
 
 [tool.setuptools]
 # Two import roots: flatc output stays a flat module under generated/python;
-# the hand-written receiver package lives under python/vr_link.
-package-dir = {"" = "generated/python", "vr_link" = "python/vr_link"}
+# the hand-written package lives under src/vr_link.
+package-dir = {"" = "generated/python", "vr_link" = "src/vr_link"}
 py-modules = ["vr_link_generated"]
-packages = ["vr_link"]
+packages = [
+    "vr_link",
+    "vr_link.calibration",
+    "vr_link.cli",
+    "vr_link.data",
+    "vr_link.sources",
+    "vr_link.tools",
+]
+
+[tool.setuptools.package-data]
+"vr_link.data" = ["configs/*.yaml", "calibration/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# --- pixi -------------------------------------------------------------------
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.dependencies]
+python = "3.12.*"
+flatbuffers = ">=24,<26"
+numpy = ">=2.0,<3"
+
+[tool.pixi.pypi-dependencies]
+vr-link-schema = { path = ".", editable = true }
+
+# conda-forge ffmpeg (gpl build) behind PyAV carries libx264, h264_nvenc,
+# h264_vaapi and h264_qsv; hardware encoders still need the host driver.
+[tool.pixi.feature.video.dependencies]
+av = ">=17.0.1,<18"
+
+[tool.pixi.feature.calibration.dependencies]
+opencv = ">=4.10,<5"
+pyyaml = ">=6.0,<7"
+
+[tool.pixi.feature.test.dependencies]
+pytest = ">=8"
+
+[tool.pixi.feature.video.tasks]
+camera-tcp-stream = "vr-link-stream --source usb"
+jetson-tcp-stream = "vr-link-stream --source dds"
+mujoco-tcp-stream = "vr-link-stream --source mujoco"
+make-mujoco-calibration = "vr-link-make-calibration"
+
+[tool.pixi.feature.calibration.tasks]
+capture-checkerboard = "vr-link-capture-checkerboard"
+calibrate-cams = "vr-link-calibrate-cams"
+calibration-fov = "vr-link-calibration-fov"
+
+[tool.pixi.feature.test.tasks]
+# A ROS 2 install on the shell PYTHONPATH autoloads its launch_testing pytest
+# plugin, which fails to import; disable plugin autoload.
+test = { cmd = "python -m pytest tests -q", env = { PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1" } }
+
+[tool.pixi.tasks]
+generate = "scripts/generate.sh"
+
+[tool.pixi.environments]
+default = { features = ["video", "calibration", "test"], solve-group = "default" }
+stream = { features = ["video", "calibration"], solve-group = "default" }

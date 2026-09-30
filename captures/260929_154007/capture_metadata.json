@@ -1,0 +1,31 @@
+{
+  "created_at": "2026-09-29T15:41:18",
+  "config_path": "/home/robros-byk/workspace/repos/hit-bench/third_party/vr_link_schema/src/vr_link/data/configs/calibration_tools.yaml",
+  "source": "usb",
+  "saved_count": 10,
+  "camera": {
+    "index": "/dev/eyes_stereo",
+    "api": "cv2.CAP_V4L2",
+    "width": 1280,
+    "height": 480,
+    "fps": 30,
+    "left_half": "right"
+  },
+  "checkerboard": {
+    "board_cols": 9,
+    "board_rows": 6,
+    "square_size": 28.0,
+    "square_unit": "mm"
+  },
+  "capture": {
+    "target_count": 10,
+    "mode": "manual",
+    "auto_start": true,
+    "auto_interval_sec": 1.0,
+    "require_both_detected": true,
+    "image_format": "png",
+    "show_saved_feedback": true,
+    "saved_feedback_sec": 0.5,
+    "window_name": "Stereo Checkerboard Capture"
+  }
+}

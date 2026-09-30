@@ -5,9 +5,8 @@ Unreal headset transport: the headset is the TCP client (it connects out to
 this host:port), so this process listens, accepts one headset at a time, and
 pushes frames until the connection drops, then waits for the next connection.
 
-Wire record = 48-byte big-endian header + payload. The header layout mirrors
-``igris_c_camera/camera_tcp_stream.py`` (the reference implementation of the
-receiver contract): magic "VSTR", version, codec, flags, sequence, width,
+Wire record = 48-byte big-endian header + payload (see :mod:`vr_link.wire`
+for the header layout): magic "VSTR", version, codec, flags, sequence, width,
 height, payload size, ``sec``/``nanosec`` wall-clock acquisition time, and a
 u64 ``sim_ns`` slot that this server fills with *simulation* time so the
 receiver can align frames with the 50 Hz control sequence even when the
@@ -43,75 +42,30 @@ import struct
 import threading
 import time
 
-import flatbuffers
-import vr_link_generated as _vr_link
-
 from .transport import StreamTransport
+from .wire import (  # noqa: F401  (re-exported: older consumers import these from here)
+    HEAD_POSE_FORMAT,
+    HEAD_POSE_PAYLOAD_SIZE,
+    HEADER_FORMAT,
+    HEADER_SIZE,
+    MAX_PACKET_BYTES,
+    WIRE_CODEC_BASE_POSE,
+    WIRE_CODEC_H264,
+    WIRE_CODEC_HEAD_POSE,
+    WIRE_CODEC_PARAMS_JSON,
+    WIRE_CODEC_SIM_STATUS,
+    WIRE_FLAG_KEYFRAME,
+    WIRE_FLAG_POSE_VALID,
+    WIRE_MAGIC,
+    WIRE_VERSION,
+    build_header,
+    build_sim_status_payload,
+)
 
 logger = logging.getLogger(__name__)
 
-# --- Wire protocol constants (must match the Unreal TCPActor receiver) ------
-WIRE_MAGIC = 0x56535452  # "VSTR"
-WIRE_VERSION = 1
-WIRE_CODEC_H264 = 1
-WIRE_CODEC_PARAMS_JSON = 2  # extension: camera-parameter JSON record
-WIRE_CODEC_HEAD_POSE = 3  # extension: per-frame rendered head-pose record
-WIRE_CODEC_BASE_POSE = 4  # extension: per-frame robot base-pose record (same layout as codec=3)
-WIRE_CODEC_SIM_STATUS = 5  # extension: FlatBuffers robros.vr.SimStatus payload (vr_link_schema)
-WIRE_FLAG_KEYFRAME = 1 << 0  # codec=1 records
-WIRE_FLAG_POSE_VALID = 1 << 0  # codec=3/4 records
-HEAD_POSE_FORMAT = ">7f"  # px py pz (m), quat wxyz — big-endian float32
-HEAD_POSE_PAYLOAD_SIZE = struct.calcsize(HEAD_POSE_FORMAT)  # 28
-HEADER_FORMAT = ">IIIIIIIIIIQ"  # 10x u32 + 1x u64, big-endian
-HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 48
-MAX_PACKET_BYTES = 2 * 1024 * 1024  # receiver's MaxPacketBytes default
-
 _ACCEPT_POLL_SEC = 0.5
 _QUEUE_POLL_SEC = 0.5
-
-
-def build_header(
-    codec: int,
-    flags: int,
-    sequence: int,
-    width: int,
-    height: int,
-    payload_size: int,
-    wall_ns: int,
-    sim_ns: int,
-) -> bytes:
-    """Pack the 48-byte big-endian wire header."""
-
-    return struct.pack(
-        HEADER_FORMAT,
-        WIRE_MAGIC,
-        WIRE_VERSION,
-        codec,
-        flags,
-        sequence & 0xFFFFFFFF,
-        width,
-        height,
-        payload_size,
-        (wall_ns // 1_000_000_000) & 0xFFFFFFFF,
-        wall_ns % 1_000_000_000,
-        sim_ns & 0xFFFFFFFFFFFFFFFF,
-    )
-
-
-def build_sim_status_payload(*, recording: bool, timestamp_ns: int) -> bytes:
-    """FlatBuffers ``robros.vr.SimStatus`` payload for a ``codec=5`` record.
-
-    State-only (never events), newest-wins on the receiver; the VSTR header
-    supplies framing, sequence and timestamps. Contract lives in
-    vr_link_schema (README, "Downlink status").
-    """
-
-    builder = flatbuffers.Builder(64)
-    _vr_link.SimStatusStart(builder)
-    _vr_link.SimStatusAddTimestampNs(builder, timestamp_ns & 0xFFFFFFFFFFFFFFFF)
-    _vr_link.SimStatusAddRecording(builder, bool(recording))
-    builder.Finish(_vr_link.SimStatusEnd(builder))
-    return bytes(builder.Output())
 
 
 class VstrTcpStreamServer(StreamTransport):
@@ -154,6 +108,7 @@ class VstrTcpStreamServer(StreamTransport):
         server.bind((self._host, self._port))
         server.listen(1)
         server.settimeout(_ACCEPT_POLL_SEC)
+        self._port = server.getsockname()[1]  # resolves port 0 (tests) to the bound port
         self._server_socket = server
         self._thread = threading.Thread(target=self._run, name="vstr-tcp-server", daemon=True)
         self._thread.start()
@@ -169,6 +124,12 @@ class VstrTcpStreamServer(StreamTransport):
             self._server_socket.close()
 
     # -- simulation-side API -------------------------------------------------
+
+    @property
+    def port(self) -> int:
+        """Listening port (the bound one once started)."""
+
+        return self._port
 
     @property
     def client_connected(self) -> bool:
