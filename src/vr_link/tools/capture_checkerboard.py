@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Sequence
 
-from ._common import camera_api_from_config, detect_checkerboard, load_tools_config, put_label, save_frame, split_sbs, write_metadata
+from ._common import camera_api_from_config, default_captures_root, detect_checkerboard, load_tools_config, put_label, save_frame, split_sbs, write_metadata
 
 
 class _UsbCapture:
@@ -50,15 +50,20 @@ class _UsbCapture:
 
 class _DdsCapture:
     def __init__(self, dds_config: dict, args: argparse.Namespace, base_dir: Path) -> None:
-        from vr_link.sources.dds import DdsStereoSource, resolve_config_uri
+        from vr_link.network.dds import DdsChannel, resolve_config_uri
+        from vr_link.sources.dds_camera import DEFAULT_DDS_CAMERA_TOPIC, DdsCameraSource
 
         domain_id = args.domain_id if args.domain_id is not None else int(dds_config.get("domain_id", 1))
         namespace = args.namespace if args.namespace is not None else str(dds_config.get("namespace", ""))
-        topic = args.topic if args.topic is not None else str(dds_config.get("topic", "igris_c/sensor/eyes_stereo"))
+        topic = args.topic if args.topic is not None else str(dds_config.get("camera_topic") or dds_config.get("topic") or DEFAULT_DDS_CAMERA_TOPIC)
         raw_uri = args.dds_config if args.dds_config is not None else (dds_config.get("config_uri") or dds_config.get("config"))
-        self.source = DdsStereoSource(domain_id, namespace, topic, config_uri=resolve_config_uri(raw_uri, base_dir=base_dir))
+        self.channel = DdsChannel.create(
+            domain_id=domain_id, namespace=namespace, topic_naming=str(dds_config.get("topic_naming", "native")),
+            config_uri=resolve_config_uri(raw_uri, base_dir=base_dir),
+        )
+        self.source = DdsCameraSource(self.channel, topic)
         self.source.open()
-        print(f"Source: DDS topic {topic}")
+        print(f"Source: DDS topic {self.channel.resolve(topic)}")
 
     def read(self):
         frame = self.source.read(timeout=0.03)
@@ -66,16 +71,17 @@ class _DdsCapture:
 
     def release(self) -> None:
         self.source.close()
+        self.channel.release()
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Stereo checkerboard capture (USB camera or DDS topic)")
     p.add_argument("--config", default=None, metavar="PATH", help="calibration_tools.yaml (default: packaged)")
     p.add_argument("--source", choices=("usb", "dds"), default="usb")
-    p.add_argument("--output-dir", type=Path, default=Path("captures"), help="root of the timestamped capture folders (default ./captures)")
+    p.add_argument("--output-dir", type=Path, default=None, help="root of the timestamped capture folders (default local:captures, i.e. <checkout>/local/captures)")
     p.add_argument("--domain-id", type=int, default=None, help="dds: override dds.domain_id")
     p.add_argument("--namespace", default=None, help="dds: override dds.namespace")
-    p.add_argument("--topic", default=None, help="dds: override dds.topic")
+    p.add_argument("--topic", default=None, help="dds: override dds.camera_topic")
     p.add_argument("--dds-config", default=None, metavar="PATH_OR_URI", help="dds: override dds.config_uri")
     return p.parse_args(argv)
 
@@ -108,7 +114,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     saved_feedback_sec = float(capture_config.get("saved_feedback_sec", 0.5))
     window_name = str(capture_config.get("window_name", "Stereo Checkerboard Capture"))
 
-    output_dir = args.output_dir / datetime.now().strftime("%y%m%d_%H%M%S")
+    output_root = args.output_dir if args.output_dir is not None else default_captures_root()
+    output_dir = output_root / datetime.now().strftime("%y%m%d_%H%M%S")
     output_dir.mkdir(parents=True, exist_ok=False)
 
     capture = _UsbCapture(camera_config) if args.source == "usb" else _DdsCapture(config.get("dds", {}), args, config_path.parent)

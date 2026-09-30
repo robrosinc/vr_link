@@ -17,7 +17,7 @@ from typing import Optional, Sequence
 from vr_link.calibration.ideal import ideal_stereo_from_fovy
 from vr_link.calibration.yaml_io import IDEAL_YAML_COMMENT, dump_unreal_yaml
 
-DEFAULT_OUTPUT = Path("mujoco_stereo_calibration.yaml")
+DEFAULT_OUTPUT_NAME = "mujoco_stereo_calibration.yaml"  # written under local:calibration
 
 
 def render_ideal_yaml(cal: dict, *, generated_at: Optional[str] = None) -> str:
@@ -50,13 +50,18 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p.add_argument("--fovy", type=float, default=90.0, help="camera fovy in degrees (default 90)")
     p.add_argument("--toe-out-deg", type=float, default=14.0, help="outward yaw of each eye in degrees (default 14)")
     p.add_argument("--baseline-mm", type=float, default=2 * 26.076, help="eye separation in mm (default 52.152)")
-    p.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help=f"output path (default ./{DEFAULT_OUTPUT})")
+    p.add_argument("--output", type=Path, default=None, help=f"output path (default local:calibration/{DEFAULT_OUTPUT_NAME})")
     return p.parse_args(argv)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     args = parse_args(argv)
     cal = ideal_stereo_from_fovy(args.width, args.height, args.fovy, args.toe_out_deg, args.baseline_mm)
+    if args.output is None:
+        from vr_link.pipeline.config import local_path
+
+        args.output = local_path(f"calibration/{DEFAULT_OUTPUT_NAME}")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(render_ideal_yaml(cal), encoding="utf-8")
     print(f"wrote {args.output} ({args.width}x{args.height} per eye, fovy {args.fovy}, toe-out {args.toe_out_deg} deg)")
 

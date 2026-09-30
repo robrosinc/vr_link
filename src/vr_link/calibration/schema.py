@@ -1,4 +1,4 @@
-"""Stereo calibration JSON contract served on port 9101 and in VSTR codec=2.
+"""Stereo calibration mapping contract (validated shape, JSON file form, tan-series k).
 
 The receiver (vr_system ``ASettingPawn`` / ``ASimTeleopPawn``) parses::
 
@@ -33,8 +33,6 @@ SIDES = ("left", "right")
 
 # Calibration request protocol (port 9101): the client sends this token
 # followed by a newline and reads the JSON reply until EOF.
-CALIBRATION_REQUEST_TOKEN = b"GET_CALIBRATION"
-CALIBRATION_REQUEST_MAX_BYTES = 256
 
 # Metadata keys accepted on input and emitted only with include_meta=True.
 META_KEYS = ("camera_model", "baseline_mm", "left_half", "fovy_deg", "toe_out_deg")
@@ -102,7 +100,7 @@ def strip_meta(cal: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def encode_payload(cal: Mapping[str, Any], *, include_meta: bool = False) -> bytes:
-    """Validate and serialise to the JSON bytes served on 9101 / codec=2."""
+    """Validate and serialise to JSON bytes (file form; the wire uses messages.calibration)."""
 
     valid = validate_calibration(cal)
     body = valid if include_meta else strip_meta(valid)
@@ -120,8 +118,6 @@ def decode_payload(data: bytes) -> Dict[str, Any]:
 
 
 __all__ = [
-    "CALIBRATION_REQUEST_MAX_BYTES",
-    "CALIBRATION_REQUEST_TOKEN",
     "CAMERA_FIELDS",
     "META_KEYS",
     "R_KEYS",

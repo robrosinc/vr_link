@@ -6,6 +6,22 @@ import flatbuffers
 from flatbuffers.compat import import_numpy
 np = import_numpy()
 
+class SourceKind(object):
+    Unknown = 0
+    Robot = 1
+    MuJoCo = 2
+    Isaac = 3
+
+
+class Message(object):
+    NONE = 0
+    VideoFrame = 1
+    Calibration = 2
+    CalibrationRequest = 3
+    RobotState = 4
+    Signals = 5
+
+
 class Pose(object):
     __slots__ = ['_tab']
 
@@ -362,48 +378,724 @@ def VRStateEnd(builder):
 
 
 
-class SimStatus(object):
+class VideoFrame(object):
     __slots__ = ['_tab']
 
     @classmethod
     def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
-        x = SimStatus()
+        x = VideoFrame()
         x.Init(buf, n + offset)
         return x
 
     @classmethod
-    def GetRootAsSimStatus(cls, buf, offset=0):
+    def GetRootAsVideoFrame(cls, buf, offset=0):
         """This method is deprecated. Please switch to GetRootAs."""
         return cls.GetRootAs(buf, offset)
-    # SimStatus
+    # VideoFrame
     def Init(self, buf, pos):
         self._tab = flatbuffers.table.Table(buf, pos)
 
-    # SimStatus
-    def TimestampNs(self):
+    # VideoFrame
+    def Codec(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
+        return 1
+
+    # VideoFrame
+    def Width(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
         return 0
 
-    # SimStatus
-    def Recording(self):
+    # VideoFrame
+    def Height(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
+        return 0
+
+    # VideoFrame
+    def IsKey(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return False
+
+    # VideoFrame
+    def Data(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
+        if o != 0:
+            a = self._tab.Vector(o)
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 1))
+        return 0
+
+    # VideoFrame
+    def DataAsNumpy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
+        if o != 0:
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Uint8Flags, o)
+        return 0
+
+    # VideoFrame
+    def DataLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # VideoFrame
+    def DataIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
+        return o == 0
+
+def VideoFrameStart(builder):
+    builder.StartObject(5)
+
+def VideoFrameAddCodec(builder, codec):
+    builder.PrependUint8Slot(0, codec, 1)
+
+def VideoFrameAddWidth(builder, width):
+    builder.PrependUint32Slot(1, width, 0)
+
+def VideoFrameAddHeight(builder, height):
+    builder.PrependUint32Slot(2, height, 0)
+
+def VideoFrameAddIsKey(builder, isKey):
+    builder.PrependBoolSlot(3, isKey, 0)
+
+def VideoFrameAddData(builder, data):
+    builder.PrependUOffsetTRelativeSlot(4, flatbuffers.number_types.UOffsetTFlags.py_type(data), 0)
+
+def VideoFrameStartDataVector(builder, numElems):
+    return builder.StartVector(1, numElems, 1)
+
+def VideoFrameEnd(builder):
+    return builder.EndObject()
+
+
+
+class CameraModel(object):
+    __slots__ = ['_tab']
+
+    @classmethod
+    def GetRootAs(cls, buf, offset=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
+        x = CameraModel()
+        x.Init(buf, n + offset)
+        return x
+
+    @classmethod
+    def GetRootAsCameraModel(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
+    # CameraModel
+    def Init(self, buf, pos):
+        self._tab = flatbuffers.table.Table(buf, pos)
+
+    # CameraModel
+    def Fx(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 0.0
+
+    # CameraModel
+    def Fy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 0.0
+
+    # CameraModel
+    def Cx(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 0.0
+
+    # CameraModel
+    def Cy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 0.0
+
+    # CameraModel
+    def K1(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 0.0
+
+    # CameraModel
+    def K2(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 0.0
+
+    # CameraModel
+    def K3(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 0.0
+
+    # CameraModel
+    def K4(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(18))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 0.0
+
+    # CameraModel
+    def R(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        if o != 0:
+            a = self._tab.Vector(o)
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 4))
+        return 0
+
+    # CameraModel
+    def RAsNumpy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        if o != 0:
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Float32Flags, o)
+        return 0
+
+    # CameraModel
+    def RLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # CameraModel
+    def RIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        return o == 0
+
+def CameraModelStart(builder):
+    builder.StartObject(9)
+
+def CameraModelAddFx(builder, fx):
+    builder.PrependFloat32Slot(0, fx, 0.0)
+
+def CameraModelAddFy(builder, fy):
+    builder.PrependFloat32Slot(1, fy, 0.0)
+
+def CameraModelAddCx(builder, cx):
+    builder.PrependFloat32Slot(2, cx, 0.0)
+
+def CameraModelAddCy(builder, cy):
+    builder.PrependFloat32Slot(3, cy, 0.0)
+
+def CameraModelAddK1(builder, k1):
+    builder.PrependFloat32Slot(4, k1, 0.0)
+
+def CameraModelAddK2(builder, k2):
+    builder.PrependFloat32Slot(5, k2, 0.0)
+
+def CameraModelAddK3(builder, k3):
+    builder.PrependFloat32Slot(6, k3, 0.0)
+
+def CameraModelAddK4(builder, k4):
+    builder.PrependFloat32Slot(7, k4, 0.0)
+
+def CameraModelAddR(builder, r):
+    builder.PrependUOffsetTRelativeSlot(8, flatbuffers.number_types.UOffsetTFlags.py_type(r), 0)
+
+def CameraModelStartRVector(builder, numElems):
+    return builder.StartVector(4, numElems, 4)
+
+def CameraModelEnd(builder):
+    return builder.EndObject()
+
+
+
+class Calibration(object):
+    __slots__ = ['_tab']
+
+    @classmethod
+    def GetRootAs(cls, buf, offset=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
+        x = Calibration()
+        x.Init(buf, n + offset)
+        return x
+
+    @classmethod
+    def GetRootAsCalibration(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
+    # Calibration
+    def Init(self, buf, pos):
+        self._tab = flatbuffers.table.Table(buf, pos)
+
+    # Calibration
+    def ImageWidth(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
+        return 0
+
+    # Calibration
+    def ImageHeight(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
+        return 0
+
+    # Calibration
+    def Left(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        if o != 0:
+            x = self._tab.Indirect(o + self._tab.Pos)
+            obj = CameraModel()
+            obj.Init(self._tab.Bytes, x)
+            return obj
+        return None
+
+    # Calibration
+    def Right(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
+        if o != 0:
+            x = self._tab.Indirect(o + self._tab.Pos)
+            obj = CameraModel()
+            obj.Init(self._tab.Bytes, x)
+            return obj
+        return None
+
+def CalibrationStart(builder):
+    builder.StartObject(4)
+
+def CalibrationAddImageWidth(builder, imageWidth):
+    builder.PrependUint32Slot(0, imageWidth, 0)
+
+def CalibrationAddImageHeight(builder, imageHeight):
+    builder.PrependUint32Slot(1, imageHeight, 0)
+
+def CalibrationAddLeft(builder, left):
+    builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(left), 0)
+
+def CalibrationAddRight(builder, right):
+    builder.PrependUOffsetTRelativeSlot(3, flatbuffers.number_types.UOffsetTFlags.py_type(right), 0)
+
+def CalibrationEnd(builder):
+    return builder.EndObject()
+
+
+
+class CalibrationRequest(object):
+    __slots__ = ['_tab']
+
+    @classmethod
+    def GetRootAs(cls, buf, offset=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
+        x = CalibrationRequest()
+        x.Init(buf, n + offset)
+        return x
+
+    @classmethod
+    def GetRootAsCalibrationRequest(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
+    # CalibrationRequest
+    def Init(self, buf, pos):
+        self._tab = flatbuffers.table.Table(buf, pos)
+
+def CalibrationRequestStart(builder):
+    builder.StartObject(0)
+
+def CalibrationRequestEnd(builder):
+    return builder.EndObject()
+
+
+
+class RobotState(object):
+    __slots__ = ['_tab']
+
+    @classmethod
+    def GetRootAs(cls, buf, offset=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
+        x = RobotState()
+        x.Init(buf, n + offset)
+        return x
+
+    @classmethod
+    def GetRootAsRobotState(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
+    # RobotState
+    def Init(self, buf, pos):
+        self._tab = flatbuffers.table.Table(buf, pos)
+
+    # RobotState
+    def BodyActual(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
+        if o != 0:
+            a = self._tab.Vector(o)
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 4))
+        return 0
+
+    # RobotState
+    def BodyActualAsNumpy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
+        if o != 0:
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Float32Flags, o)
+        return 0
+
+    # RobotState
+    def BodyActualLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # RobotState
+    def BodyActualIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
+        return o == 0
+
+    # RobotState
+    def BodyActualValid(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return False
 
-def SimStatusStart(builder):
+    # RobotState
+    def BodyActualStampNs(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # RobotState
+    def BodyReference(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
+        if o != 0:
+            a = self._tab.Vector(o)
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 4))
+        return 0
+
+    # RobotState
+    def BodyReferenceAsNumpy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
+        if o != 0:
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Float32Flags, o)
+        return 0
+
+    # RobotState
+    def BodyReferenceLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # RobotState
+    def BodyReferenceIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
+        return o == 0
+
+    # RobotState
+    def BodyReferenceValid(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return False
+
+    # RobotState
+    def BodyReferenceStampNs(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # RobotState
+    def HandActual(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
+        if o != 0:
+            a = self._tab.Vector(o)
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 4))
+        return 0
+
+    # RobotState
+    def HandActualAsNumpy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
+        if o != 0:
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Float32Flags, o)
+        return 0
+
+    # RobotState
+    def HandActualLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # RobotState
+    def HandActualIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
+        return o == 0
+
+    # RobotState
+    def HandActualValid(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(18))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return False
+
+    # RobotState
+    def HandActualStampNs(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # RobotState
+    def HandCommand(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
+        if o != 0:
+            a = self._tab.Vector(o)
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 4))
+        return 0
+
+    # RobotState
+    def HandCommandAsNumpy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
+        if o != 0:
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Float32Flags, o)
+        return 0
+
+    # RobotState
+    def HandCommandLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # RobotState
+    def HandCommandIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
+        return o == 0
+
+    # RobotState
+    def HandCommandValid(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(24))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return False
+
+    # RobotState
+    def HandCommandStampNs(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(26))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # RobotState
+    def BasePose(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(28))
+        if o != 0:
+            x = o + self._tab.Pos
+            obj = Pose()
+            obj.Init(self._tab.Bytes, x)
+            return obj
+        return None
+
+def RobotStateStart(builder):
+    builder.StartObject(13)
+
+def RobotStateAddBodyActual(builder, bodyActual):
+    builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(bodyActual), 0)
+
+def RobotStateStartBodyActualVector(builder, numElems):
+    return builder.StartVector(4, numElems, 4)
+
+def RobotStateAddBodyActualValid(builder, bodyActualValid):
+    builder.PrependBoolSlot(1, bodyActualValid, 0)
+
+def RobotStateAddBodyActualStampNs(builder, bodyActualStampNs):
+    builder.PrependUint64Slot(2, bodyActualStampNs, 0)
+
+def RobotStateAddBodyReference(builder, bodyReference):
+    builder.PrependUOffsetTRelativeSlot(3, flatbuffers.number_types.UOffsetTFlags.py_type(bodyReference), 0)
+
+def RobotStateStartBodyReferenceVector(builder, numElems):
+    return builder.StartVector(4, numElems, 4)
+
+def RobotStateAddBodyReferenceValid(builder, bodyReferenceValid):
+    builder.PrependBoolSlot(4, bodyReferenceValid, 0)
+
+def RobotStateAddBodyReferenceStampNs(builder, bodyReferenceStampNs):
+    builder.PrependUint64Slot(5, bodyReferenceStampNs, 0)
+
+def RobotStateAddHandActual(builder, handActual):
+    builder.PrependUOffsetTRelativeSlot(6, flatbuffers.number_types.UOffsetTFlags.py_type(handActual), 0)
+
+def RobotStateStartHandActualVector(builder, numElems):
+    return builder.StartVector(4, numElems, 4)
+
+def RobotStateAddHandActualValid(builder, handActualValid):
+    builder.PrependBoolSlot(7, handActualValid, 0)
+
+def RobotStateAddHandActualStampNs(builder, handActualStampNs):
+    builder.PrependUint64Slot(8, handActualStampNs, 0)
+
+def RobotStateAddHandCommand(builder, handCommand):
+    builder.PrependUOffsetTRelativeSlot(9, flatbuffers.number_types.UOffsetTFlags.py_type(handCommand), 0)
+
+def RobotStateStartHandCommandVector(builder, numElems):
+    return builder.StartVector(4, numElems, 4)
+
+def RobotStateAddHandCommandValid(builder, handCommandValid):
+    builder.PrependBoolSlot(10, handCommandValid, 0)
+
+def RobotStateAddHandCommandStampNs(builder, handCommandStampNs):
+    builder.PrependUint64Slot(11, handCommandStampNs, 0)
+
+def RobotStateAddBasePose(builder, basePose):
+    builder.PrependStructSlot(12, flatbuffers.number_types.UOffsetTFlags.py_type(basePose), 0)
+
+def RobotStateEnd(builder):
+    return builder.EndObject()
+
+
+
+class Signals(object):
+    __slots__ = ['_tab']
+
+    @classmethod
+    def GetRootAs(cls, buf, offset=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
+        x = Signals()
+        x.Init(buf, n + offset)
+        return x
+
+    @classmethod
+    def GetRootAsSignals(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
+    # Signals
+    def Init(self, buf, pos):
+        self._tab = flatbuffers.table.Table(buf, pos)
+
+    # Signals
+    def Recording(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return False
+
+    # Signals
+    def Source(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
+        return 0
+
+def SignalsStart(builder):
     builder.StartObject(2)
 
-def SimStatusAddTimestampNs(builder, timestampNs):
-    builder.PrependUint64Slot(0, timestampNs, 0)
+def SignalsAddRecording(builder, recording):
+    builder.PrependBoolSlot(0, recording, 0)
 
-def SimStatusAddRecording(builder, recording):
-    builder.PrependBoolSlot(1, recording, 0)
+def SignalsAddSource(builder, source):
+    builder.PrependUint8Slot(1, source, 0)
 
-def SimStatusEnd(builder):
+def SignalsEnd(builder):
+    return builder.EndObject()
+
+
+
+class Envelope(object):
+    __slots__ = ['_tab']
+
+    @classmethod
+    def GetRootAs(cls, buf, offset=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
+        x = Envelope()
+        x.Init(buf, n + offset)
+        return x
+
+    @classmethod
+    def GetRootAsEnvelope(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
+    # Envelope
+    def Init(self, buf, pos):
+        self._tab = flatbuffers.table.Table(buf, pos)
+
+    # Envelope
+    def SchemaVersion(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
+        return 2
+
+    # Envelope
+    def Seq(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
+        return 0
+
+    # Envelope
+    def WallNs(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # Envelope
+    def SimNs(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # Envelope
+    def BodyType(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
+        return 0
+
+    # Envelope
+    def Body(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
+        if o != 0:
+            from flatbuffers.table import Table
+            obj = Table(bytearray(), 0)
+            self._tab.Union(obj, o)
+            return obj
+        return None
+
+def EnvelopeStart(builder):
+    builder.StartObject(6)
+
+def EnvelopeAddSchemaVersion(builder, schemaVersion):
+    builder.PrependUint32Slot(0, schemaVersion, 2)
+
+def EnvelopeAddSeq(builder, seq):
+    builder.PrependUint32Slot(1, seq, 0)
+
+def EnvelopeAddWallNs(builder, wallNs):
+    builder.PrependUint64Slot(2, wallNs, 0)
+
+def EnvelopeAddSimNs(builder, simNs):
+    builder.PrependUint64Slot(3, simNs, 0)
+
+def EnvelopeAddBodyType(builder, bodyType):
+    builder.PrependUint8Slot(4, bodyType, 0)
+
+def EnvelopeAddBody(builder, body):
+    builder.PrependUOffsetTRelativeSlot(5, flatbuffers.number_types.UOffsetTFlags.py_type(body), 0)
+
+def EnvelopeEnd(builder):
     return builder.EndObject()
 
 

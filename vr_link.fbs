@@ -1,4 +1,5 @@
-// Wire schema for the VR pose/input uplink (headset/Unreal -> simulation PC).
+// Wire schema of vr_link: the VR pose/input uplink (headset -> PC, VRS1) and
+// the video/robot-state downlink (PC -> headset, VRL2; see the bottom half).
 //
 // Framing (the schema does NOT include it): each record on the TCP byte
 // stream is preceded by an 8-byte big-endian prefix:
@@ -91,18 +92,114 @@ table VRState {
   record_toggle_count: uint;
 }
 
-// Downlink status record (simulation PC -> headset), carried on the VSTR
-// video channel (port 9100) as a codec=5 record. Framing, sequence and
-// timestamps come from the VSTR header; this table is the payload. Like
-// VRState it always carries full current state (never events), so a receiver
-// that keeps only the newest record loses nothing. Parse with
-// GetRoot<SimStatus> (root_type stays VRState).
-table SimStatus {
-  // Sender wall clock, informational.
-  timestamp_ns: ulong;
+// ---------------------------------------------------------------------------
+// Downlink (PC -> headset). vr_link 2.0 replaced the VSTR 48-byte header and
+// its codec records with framed FlatBuffers Envelopes. One record on the 9100
+// stream, and each of the request and the reply on 9101, is:
+//
+//   magic  u32 = 0x56524C32 ("VRL2")
+//   length u32 = size of the FlatBuffers payload in bytes
+//   payload    = robros.vr.Envelope   (parse with GetRoot<Envelope>;
+//                root_type stays VRState for the uplink)
+//
+// Every record carries full current state (never events). seq increases by
+// one per Envelope on a connection. The Signals and RobotState records that
+// belong to a video frame are sent immediately BEFORE that VideoFrame and
+// carry the same wall_ns/sim_ns and consecutive seq values; receivers pair
+// them on (wall_ns, sim_ns) or on the sender order.
+// ---------------------------------------------------------------------------
 
-  // Episode data recording is active on the simulation side.
-  recording: bool;
+// Which kind of system produced the stream (HUD label, no behaviour change).
+enum SourceKind : ubyte { Unknown = 0, Robot = 1, MuJoCo = 2, Isaac = 3 }
+
+// One H.264 Annex-B access unit of the side-by-side stereo frame (right eye
+// in the LEFT half, matching the hardware). SPS/PPS are repeated in-band on
+// every IDR; a receiver gets nothing before the first key frame.
+table VideoFrame {
+  codec: ubyte = 1;        // 1 = H.264 (the only value in 2.0)
+  width: uint;             // SBS frame width (both eyes)
+  height: uint;
+  is_key: bool;
+  data: [ubyte];
+}
+
+// Per-eye camera model in pixels of the per-eye image: OpenCV fisheye
+// intrinsics, k1..k4 (a pinhole sender uses the tan(theta) Taylor series,
+// never zeros) and the stereoRectify rotation r (9 floats, row-major, eye
+// optical frame -> mid frame).
+table CameraModel {
+  fx: float;
+  fy: float;
+  cx: float;
+  cy: float;
+  k1: float;
+  k2: float;
+  k3: float;
+  k4: float;
+  r: [float];              // exactly 9
+}
+
+// Stereo calibration. Sent once per 9100 connection before any video and as
+// the 9101 reply to a CalibrationRequest.
+table Calibration {
+  image_width: uint;       // per-eye
+  image_height: uint;
+  left: CameraModel;
+  right: CameraModel;
+}
+
+// 9101 request body. Empty: the connection itself is the request.
+table CalibrationRequest {}
+
+// Robot joint state matched (by the sender) to the video frame it precedes.
+// Each group has its own valid flag and source stamp (0 when unknown); an
+// invalid group carries an empty vector and must be ignored by the receiver.
+//
+// body_*: exactly 31 radians in the igris_c_sdk joint-space order:
+//   waist yaw/roll/pitch; left leg hip pitch/roll/yaw, knee, ankle pitch/roll;
+//   right leg (same); left arm shoulder pitch/roll/yaw, elbow, wrist yaw/roll/
+//   pitch; right arm (same); neck yaw, neck pitch.
+// hand_*: exactly 12 in motor-id order 11..16 (right: thumb flexion, index,
+//   middle, ring, little, thumb CMC) then 21..26 (left, same layout).
+//   hand_actual = HandState.motor_state[i].q; hand_command =
+//   HandCmd.motor_cmd[i].q (normalized, 0 = open, 1 = closed).
+table RobotState {
+  body_actual: [float];            // LowState.joint_state[i].q
+  body_actual_valid: bool;
+  body_actual_stamp_ns: ulong;
+
+  body_reference: [float];         // gmr/refstate (MasterArmState.joint_state[i].q)
+  body_reference_valid: bool;
+  body_reference_stamp_ns: ulong;
+
+  hand_actual: [float];            // HandState.motor_state[i].q
+  hand_actual_valid: bool;
+  hand_actual_stamp_ns: ulong;
+
+  hand_command: [float];           // HandCmd.motor_cmd[i].q
+  hand_command_valid: bool;
+  hand_command_stamp_ns: ulong;
+
+  // Robot base pose in the simulation world frame (Z-up, right-handed,
+  // metres, wxyz). Pose.valid is false when the sender has no estimate
+  // (the real robot).
+  base_pose: Pose;
+}
+
+// Sender-side flags. Replaces the 1.x SimStatus record.
+table Signals {
+  recording: bool;                 // episode data recording active on the PC side
+  source: SourceKind = Unknown;
+}
+
+union Message { VideoFrame, Calibration, CalibrationRequest, RobotState, Signals }
+
+table Envelope {
+  schema_version: uint = 2;
+  seq: uint;
+  wall_ns: ulong;                  // CLOCK_REALTIME of the frame / sample
+  sim_ns: ulong;                   // simulation time, 0 for real cameras
+  body: Message;
 }
 
 root_type VRState;

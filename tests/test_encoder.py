@@ -4,7 +4,7 @@ import threading
 import numpy as np
 import pytest
 
-from vr_link import encoder as enc
+from vr_link.video import encoder as enc
 
 av = pytest.importorskip("av")
 

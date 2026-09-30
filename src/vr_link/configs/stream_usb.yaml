@@ -1,0 +1,52 @@
+# VRL2 downlink from the NUC's USB eyes_stereo camera + the robot's DDS state.
+#   vr-link-stream --source usb [--config this-file] [--dds-namespace igris_c_XXXX]
+# Same schema for every source; only the capture keys and the robot_state
+# sources differ. Relative paths resolve against this file's directory;
+# "pkg:" addresses the vr_link package, "local:" the git-ignored local data root
+# (<checkout>/local, or $VR_LINK_LOCAL_DIR).
+
+eyes_stereo:
+  cam_index: "/dev/eyes_stereo"
+  # Side-by-side, right eye in the left half. 1280x480 = 640x480 per eye (4:3),
+  # the mode shared with the simulators. The served calibration must be
+  # measured in this same mode (vr-link-capture-checkerboard defaults to it).
+  resolution: [1280, 480]
+  fps: 30
+  enable_stereo: true
+  apply_tuning: true        # camera_image_stream.cpp tone settings via V4L2
+
+tcp:
+  host: "0.0.0.0"
+  port: 9100
+  bitrate: 8000000
+  gop: 30
+  fourcc: "MJPG"
+  encoder: "sw"             # sw | libx264 | h264_nvenc | h264_vaapi | h264_qsv
+
+calibration:
+  enable: true
+  host: "0.0.0.0"
+  port: 9101
+  provider: yaml            # the real camera serves its measured calibration
+  yaml: "local:calibration/igris_c_eyes_stereo_unreal.yaml"   # vr-link-calibrate-cams ... --serve-as igris_c_eyes_stereo_unreal.yaml
+
+# Robot state matched to each frame by timestamp (igris_c_sdk wheel required).
+dds:
+  domain_id: 1
+  namespace: ""             # REQUIRED: the robot's namespace (or --dds-namespace)
+  topic_naming: native      # native | ros_compatible (must match the robot bridge)
+  config_uri: ""            # CycloneDDS XML path/URI; empty honours $CYCLONEDDS_URI
+  topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate}
+  buffer_capacity: 512
+
+robot_state:
+  actual: dds               # LowState.joint_state (31)
+  reference: dds            # gmr/refstate from the igris_c_gmr producer (31)
+  hand_actual: dds          # HandState (12)
+  hand_command: dds         # handcmd from the igris_c_gmr producer (12)
+  base_pose: none           # no base estimate on the real robot
+  tolerances_ms: {actual: 5, reference: 15, hand_actual: 40, hand_command: 40}
+
+signals:
+  source: robot
+  recording: none

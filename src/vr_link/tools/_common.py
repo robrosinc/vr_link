@@ -7,9 +7,21 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Tuple
 
-from vr_link.config import PathLike, packaged_data_path
+from vr_link.pipeline.config import PathLike, local_path, packaged_path
 
 DEFAULT_TOOLS_CONFIG = "configs/calibration_tools.yaml"
+
+
+def default_captures_root() -> Path:
+    """``local:captures``: where vr-link-capture-checkerboard writes its timestamped folders."""
+
+    return local_path("captures")
+
+
+def default_calibration_root() -> Path:
+    """``local:calibration``: calibrate-cams outputs and the served calibration files."""
+
+    return local_path("calibration")
 
 
 def load_tools_config(path: Optional[PathLike]) -> Tuple[Dict[str, Any], Path]:
@@ -17,7 +29,7 @@ def load_tools_config(path: Optional[PathLike]) -> Tuple[Dict[str, Any], Path]:
 
     import yaml
 
-    target = Path(path) if path else packaged_data_path(DEFAULT_TOOLS_CONFIG)
+    target = Path(path) if path else packaged_path(DEFAULT_TOOLS_CONFIG)
     if not target.exists():
         raise FileNotFoundError(f"Missing config file: {target}")
     data = yaml.safe_load(target.read_text(encoding="utf-8"))

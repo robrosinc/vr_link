@@ -17,6 +17,7 @@ leave-one-out retry.
 from __future__ import annotations
 
 import argparse
+import shutil
 import re
 from datetime import datetime
 from pathlib import Path
@@ -27,7 +28,7 @@ import numpy as np
 from vr_link.calibration.fov import format_fov_summary
 from vr_link.calibration.yaml_io import MEASURED_YAML_COMMENT, dump_unreal_yaml
 
-from ._common import detect_checkerboard, find_latest_capture_dir, load_tools_config, split_sbs
+from ._common import default_calibration_root, default_captures_root, detect_checkerboard, find_latest_capture_dir, load_tools_config, split_sbs
 
 
 # --- geometry helpers ------------------------------------------------------------
@@ -465,10 +466,11 @@ def calibrate_with_retry(camera_model, object_points, image_points_left, image_p
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Stereo calibration from SBS checkerboard captures")
     p.add_argument("--config", default=None, metavar="PATH", help="calibration_tools.yaml (default: packaged)")
-    group = p.add_mutually_exclusive_group(required=True)
+    group = p.add_mutually_exclusive_group()
     group.add_argument("--input-dir", type=Path, help="capture folder with *_sbs.png")
-    group.add_argument("--captures-root", type=Path, help="use the newest yymmdd_HHMMSS folder under this root")
-    p.add_argument("--output-dir", type=Path, default=Path("calibration_out"), help="where the YAML/npz/debug outputs go (default ./calibration_out)")
+    group.add_argument("--captures-root", type=Path, help="use the newest yymmdd_HHMMSS folder under this root (default local:captures)")
+    p.add_argument("--output-dir", type=Path, default=None, help="where the YAML/npz/debug outputs go (default local:calibration/<capture folder name>)")
+    p.add_argument("--serve-as", default=None, metavar="NAME", help="also copy the Unreal YAML to local:calibration/NAME, the file the stream configs serve (e.g. igris_c_eyes_stereo_unreal.yaml)")
     p.add_argument("--camera-model", choices=("fisheye", "pinhole"), default=None, help="override calibration.camera_model")
     p.add_argument("--no-debug-images", action="store_true", help="skip the corner/rectified debug images")
     return p.parse_args(argv)
@@ -489,7 +491,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if camera_model not in ("pinhole", "fisheye"):
         raise ValueError("calibration.camera_model must be 'pinhole' or 'fisheye'.")
 
-    input_dir = args.input_dir if args.input_dir is not None else find_latest_capture_dir(args.captures_root)
+    input_dir = args.input_dir if args.input_dir is not None else find_latest_capture_dir(args.captures_root or default_captures_root())
     if not input_dir.exists():
         raise FileNotFoundError(f"Input directory does not exist: {input_dir}")
     image_pattern = str(cal_cfg.get("image_pattern", "*_sbs.png"))
@@ -512,7 +514,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     result = calibrate_with_retry(camera_model, object_points, image_points_left, image_points_right, valid_files, failed_files, image_size, cal_cfg, min_valid_pairs)
     common_roi = roi_intersection(result["roi_left"], result["roi_right"])
 
-    output_dir: Path = args.output_dir
+    output_dir: Path = args.output_dir if args.output_dir is not None else default_calibration_root() / input_dir.name
     output_dir.mkdir(parents=True, exist_ok=True)
     output_yaml = output_dir / str(cal_cfg.get("output_yaml", "stereo_calibration.yaml"))
     output_unreal_yaml = output_dir / str(cal_cfg.get("output_unreal_yaml", "stereo_calibration_unreal.yaml"))
@@ -545,6 +547,11 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         print(format_fov_summary(measured_calibration(result, image_size)))
     print(f"YAML:        {output_yaml}")
     print(f"Unreal YAML: {output_unreal_yaml}")
+    if args.serve_as:
+        served = default_calibration_root() / args.serve_as
+        served.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(output_unreal_yaml, served)
+        print(f"Served as:   {served}")
     print(f"Maps:        {output_maps}")
     if not args.no_debug_images:
         print(f"Debug:       {debug_base}")

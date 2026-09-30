@@ -12,21 +12,22 @@
 #   video        H.264 encoding + the standalone stream pump (PyAV)
 #   yaml         YAML calibration files / stream configs
 #   calibration  checkerboard capture + stereo calibration tools (OpenCV)
-#   dds          Jetson DDS frame source. Needs the workspace igris_c_sdk
-#                Python binding (py3.12 build, not pip-installable): install
-#                it in the consumer environment or set IGRIS_C_SDK_ROOT.
+#   dds          marker only: the DDS camera source and robot-state subscribers
+#                need the igris_c_sdk Python binding (py3.12 wheel built from
+#                the thirdparty/igris_c_sdk submodule, not pip-installable):
+#                `pixi run install-sdk` or set IGRIS_C_SDK_ROOT.
 #   dev          pytest
 #
-# Standalone use (streamers, calibration tools) is pixi-managed: `pixi run
-# mujoco-tcp-stream`, `pixi run test`, see [tool.pixi.*] below.
+# Standalone use (senders, calibration tools) is pixi-managed: `pixi run
+# shm-tcp-stream`, `pixi run test`, see [tool.pixi.*] below.
 [build-system]
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "vr-link-schema"
-version = "1.1.0"
-description = "VR wire contract, pose receiver, video transport, H.264 encoding, camera stream sources and stereo calibration"
+version = "2.0.0"
+description = "VR headset link: VRS1 pose uplink, VRL2 downlink (video, calibration, robot state), H.264 encoding, frame/state sources and stereo calibration"
 # The receiver package evaluates tuple[...] type aliases at import time (3.9+).
 requires-python = ">=3.9"
 # Runtime must stay compatible with the flatc that generated the binding
@@ -56,13 +57,21 @@ packages = [
     "vr_link",
     "vr_link.calibration",
     "vr_link.cli",
-    "vr_link.data",
+    "vr_link.configs",
+    "vr_link.messages",
+    "vr_link.network",
+    "vr_link.network.dds",
+    "vr_link.pipeline",
     "vr_link.sources",
     "vr_link.tools",
+    "vr_link.utils",
+    "vr_link.video",
 ]
 
 [tool.setuptools.package-data]
-"vr_link.data" = ["configs/*.yaml", "calibration/*.yaml"]
+# Only the configs ship; measured calibrations and captures are machine-local
+# (local/, git-ignored) and never enter the wheel.
+"vr_link.configs" = ["*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -74,6 +83,7 @@ platforms = ["linux-64"]
 
 [tool.pixi.dependencies]
 python = "3.12.*"
+pip = "*"                 # install-sdk installs the human-built igris_c_sdk wheel with pip
 flatbuffers = ">=24,<26"
 numpy = ">=2.0,<3"
 
@@ -95,7 +105,9 @@ pytest = ">=8"
 [tool.pixi.feature.video.tasks]
 camera-tcp-stream = "vr-link-stream --source usb"
 jetson-tcp-stream = "vr-link-stream --source dds"
-mujoco-tcp-stream = "vr-link-stream --source mujoco"
+shm-tcp-stream = "vr-link-stream --source shm"
+mujoco-tcp-stream = "vr-link-stream --source shm"   # 1.x name
+state-only-stream = "vr-link-stream --source none"
 make-mujoco-calibration = "vr-link-make-calibration"
 
 [tool.pixi.feature.calibration.tasks]
@@ -110,6 +122,10 @@ test = { cmd = "python -m pytest tests -q", env = { PYTEST_DISABLE_PLUGIN_AUTOLO
 
 [tool.pixi.tasks]
 generate = "scripts/generate.sh"
+# igris_c_sdk Python binding: a human builds the wheel (`task wheel` in
+# thirdparty/igris_c_sdk at the pinned commit); this installs it into the env.
+install-sdk = "bash scripts/install_sdk_wheel.sh"
+check-sdk = "python -c \"import igris_c_sdk; print('igris_c_sdk', getattr(igris_c_sdk, '__version__', '?'), igris_c_sdk.__file__); assert hasattr(igris_c_sdk, 'ChannelFactory')\""
 
 [tool.pixi.environments]
 default = { features = ["video", "calibration", "test"], solve-group = "default" }

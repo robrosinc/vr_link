@@ -1,10 +1,10 @@
 """Field of view derived from a calibration: the number the simulator's fovy must match."""
 import math
-from importlib import resources
 
 import pytest
 
 from vr_link.calibration import fov, ideal
+from vr_link.pipeline.config import local_path
 
 pytest.importorskip("yaml")
 from vr_link.calibration.yaml_io import load_unreal_yaml  # noqa: E402
@@ -21,7 +21,7 @@ def test_ideal_pinhole_model_recovers_its_own_fovy():
 
 
 def test_local_measured_calibration_is_a_93_to_95_degree_fisheye():
-    path = resources.files("vr_link.data") / "calibration" / "igris_c_eyes_stereo_unreal.yaml"
+    path = local_path("calibration/igris_c_eyes_stereo_unreal.yaml")
     if not path.is_file():
         pytest.skip("local measured calibration not present in this checkout")
     cal = load_unreal_yaml(path)
