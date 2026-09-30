@@ -14,7 +14,7 @@ Wire contract, "VRS1" record (big-endian prefix + FlatBuffers payload):
     payload           = ``robros.vr.VRState`` FlatBuffers message
 
 The VRState schema (``vr_link.fbs``) and this module live in the
-``vr_link_schema`` repository; ``vr_link_generated`` is the flatc binding
+``vr_link`` repository; ``vr_link_generated`` is the flatc binding
 committed beside it (regenerated via ``scripts/generate.sh``). The record
 carries the 24-joint skeleton, the raw HMD pose, both controllers' input state
 (triggers, grips, buttons, thumbsticks) that fills

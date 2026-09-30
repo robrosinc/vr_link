@@ -25,7 +25,7 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vr-link-schema"
+name = "vr-link"
 version = "2.0.0"
 description = "VR headset link: VRS1 pose uplink, VRL2 downlink (video, calibration, robot state), H.264 encoding, frame/state sources and stereo calibration"
 # The receiver package evaluates tuple[...] type aliases at import time (3.9+).
@@ -88,7 +88,7 @@ flatbuffers = ">=24,<26"
 numpy = ">=2.0,<3"
 
 [tool.pixi.pypi-dependencies]
-vr-link-schema = { path = ".", editable = true }
+vr-link = { path = ".", editable = true }
 
 # conda-forge ffmpeg (gpl build) behind PyAV carries libx264, h264_nvenc,
 # h264_vaapi and h264_qsv; hardware encoders still need the host driver.

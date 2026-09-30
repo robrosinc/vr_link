@@ -3065,9 +3065,9 @@ packages:
   size: 118849
   timestamp: 1784250406640
 - pypi: ./
-  name: vr-link-schema
+  name: vr-link
   version: 2.0.0
-  sha256: ae9aafde21c3917f8fd5d9737b27de3661d6c3eb21276be58a60338494a80369
+  sha256: 60e4d82177d7ad61580c5475e9ad542c122ce5b00d8d6d6930db2c68d0783aef
   requires_dist:
   - flatbuffers>=24,<26
   - numpy>=1.24

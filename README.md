@@ -1,4 +1,4 @@
-# vr_link_schema
+# vr_link
 
 Wire contract and Python bridge code for the link between the headset
 application (`vr_system`, Unreal, C++) and the PC side (real robot NUC,

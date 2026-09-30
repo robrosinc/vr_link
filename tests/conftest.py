@@ -1,4 +1,4 @@
-"""Test this checkout's package, not whichever vr_link_schema is pip-installed.
+"""Test this checkout's package, not whichever vr_link is pip-installed.
 
 Consumers install the package editable from their own submodule checkout, so
 an environment may already expose a different revision of ``vr_link`` /
