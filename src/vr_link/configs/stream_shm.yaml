@@ -1,0 +1,58 @@
+# VRL2 downlink fed by a simulator's vision shared-memory segment (MuJoCo today).
+#   vr-link-stream --source shm [--config this-file]
+# The frame geometry is fixed by the producer (include/vr_link/vision_shm.h:
+# 1280x480 SBS = 640x480 per eye, 30 Hz, right eye in the left half). With a
+# layout-v3 producer the robot state (actual joints, base pose, recording) is
+# written together with each frame; the operator's reference and hand command
+# still come from the igris_c_gmr producer over DDS.
+
+eyes_stereo:
+  resolution: [1280, 480]   # informational; the segment header is authoritative
+  fps: 30
+  enable_stereo: true
+
+tcp:
+  host: "0.0.0.0"
+  port: 9100
+  bitrate: 8000000
+  gop: 30
+  encoder: "sw"
+
+calibration:
+  enable: true
+  host: "0.0.0.0"
+  port: 9101
+  # ideal_from_source: computed on request from the per-eye camera model the
+  # producer publishes in the segment header (layout >= 2). A v1 producer has
+  # no metadata; then the `ideal` rig below is used (ideal_from_config).
+  provider: ideal_from_source
+  ideal:
+    fovy_deg: 90.0          # igris_c_v2_vision.xml.xacro
+    toe_out_deg: 14.0
+    baseline_mm: 52.152     # 2 * 0.026076 m
+
+shm:
+  shm_name: "/igris_c_mujoco_vision_shm"
+  read_timeout_sec: 1.0     # wait for a new frame before re-checking the segment
+
+# The operator's reference joints and hand command come from the igris_c_gmr
+# producer over DDS (igris_c_sdk wheel: `pixi run install-sdk`). Without them
+# the headset's hand-target overlay stays hidden (it needs body_reference).
+# Set reference/hand_command to none to run without the SDK.
+dds:
+  domain_id: 0              # igris_c_gmr producer default (--dds_domain_id)
+  namespace: ""             # REQUIRED: the producer's --dds_namespace (or --dds-namespace on the CLI)
+  topic_naming: native      # must match the producer's --dds_topic_naming
+  topics: {refstate: gmr/refstate, handcmd: handcmd}
+
+robot_state:
+  actual: shm               # from the v3 segment (invalid with a v1/v2 producer)
+  reference: dds            # gmr/refstate -> overlay target hand
+  hand_actual: shm          # MuJoCo does not write it yet (invalid)
+  hand_command: dds         # handcmd -> overlay ghost fingers
+  base_pose: shm
+  tolerances_ms: {reference: 15, hand_command: 40}
+
+signals:
+  source: mujoco
+  recording: shm

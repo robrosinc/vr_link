@@ -1,0 +1,3 @@
+[submodule "thirdparty/igris_c_sdk"]
+	path = thirdparty/igris_c_sdk
+	url = git@bitbucket.org:robrosinc/igris_c_sdk.git

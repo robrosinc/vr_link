@@ -1,0 +1,32 @@
+# VRL2 downlink without a camera (headset "NO CAMERA"): RobotState/Signals only.
+#   vr-link-stream --source none [--config this-file] [--dds-namespace igris_c_XXXX]
+
+tcp:
+  host: "0.0.0.0"
+  port: 9100
+
+calibration:
+  enable: false             # nothing to display
+
+dds:
+  domain_id: 1
+  namespace: ""             # REQUIRED
+  topic_naming: native
+  config_uri: ""
+  topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate}
+  buffer_capacity: 512
+
+robot_state:
+  actual: dds
+  reference: dds
+  hand_actual: dds
+  hand_command: dds
+  base_pose: none
+
+signals:
+  source: robot
+  recording: none
+
+state_only:
+  rate_hz: 50               # RobotState/Signals records per second while a headset is attached
+  max_age_ms: 100           # a field older than this is sent as invalid

@@ -55,7 +55,7 @@ from collections.abc import Callable
 import flatbuffers
 import vr_link_generated as _vr_link
 
-from .types import (
+from ..types import (
     BODY_JOINT_NAMES,
     HAND_KEYPOINT_COUNT,
     ControllerInput,

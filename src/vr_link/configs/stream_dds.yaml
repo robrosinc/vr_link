@@ -1,0 +1,46 @@
+# VRL2 downlink fed by the robot's eyes_stereo DDS topic (JPEG) + the robot's DDS state.
+#   vr-link-stream --source dds [--config this-file] [--dds-namespace igris_c_XXXX]
+# Needs the igris_c_sdk Python binding (pixi run install-sdk, or IGRIS_C_SDK_ROOT).
+# NOTE (verification owner: operator): confirm camera_topic and the namespace
+# against the deployed igris_c_camera / bridge configuration.
+
+eyes_stereo:
+  resolution: [1280, 480]   # frames are resized to this SBS size before encoding; must match the served calibration's mode
+  fps: 30
+  enable_stereo: true
+
+tcp:
+  host: "0.0.0.0"
+  port: 9100
+  bitrate: 8000000
+  gop: 30
+  encoder: "sw"
+
+calibration:
+  enable: true
+  host: "0.0.0.0"
+  port: 9101
+  provider: yaml
+  yaml: "local:calibration/igris_c_eyes_stereo_unreal.yaml"   # vr-link-calibrate-cams ... --serve-as igris_c_eyes_stereo_unreal.yaml
+
+dds:
+  domain_id: 1
+  namespace: ""             # REQUIRED
+  topic_naming: native
+  config_uri: ""            # CycloneDDS XML path/URI; empty honours $CYCLONEDDS_URI / defaults
+  camera_topic: "igris_c/sensor/eyes_stereo/compressed"   # igris_c_camera publishes CompressedImage_ on <topic>/compressed
+  frame_id: ""              # drop samples whose header.frame_id differs (empty = accept all)
+  topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate}
+  buffer_capacity: 512
+
+robot_state:
+  actual: dds
+  reference: dds
+  hand_actual: dds
+  hand_command: dds
+  base_pose: none
+  tolerances_ms: {actual: 5, reference: 15, hand_actual: 40, hand_command: 40}
+
+signals:
+  source: robot
+  recording: none

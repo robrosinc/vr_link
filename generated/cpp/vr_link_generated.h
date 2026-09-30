@@ -27,8 +27,133 @@ struct HandStateBuilder;
 struct VRState;
 struct VRStateBuilder;
 
-struct SimStatus;
-struct SimStatusBuilder;
+struct VideoFrame;
+struct VideoFrameBuilder;
+
+struct CameraModel;
+struct CameraModelBuilder;
+
+struct Calibration;
+struct CalibrationBuilder;
+
+struct CalibrationRequest;
+struct CalibrationRequestBuilder;
+
+struct RobotState;
+struct RobotStateBuilder;
+
+struct Signals;
+struct SignalsBuilder;
+
+struct Envelope;
+struct EnvelopeBuilder;
+
+enum SourceKind : uint8_t {
+  SourceKind_Unknown = 0,
+  SourceKind_Robot = 1,
+  SourceKind_MuJoCo = 2,
+  SourceKind_Isaac = 3,
+  SourceKind_MIN = SourceKind_Unknown,
+  SourceKind_MAX = SourceKind_Isaac
+};
+
+inline const SourceKind (&EnumValuesSourceKind())[4] {
+  static const SourceKind values[] = {
+    SourceKind_Unknown,
+    SourceKind_Robot,
+    SourceKind_MuJoCo,
+    SourceKind_Isaac
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesSourceKind() {
+  static const char * const names[5] = {
+    "Unknown",
+    "Robot",
+    "MuJoCo",
+    "Isaac",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameSourceKind(SourceKind e) {
+  if (::flatbuffers::IsOutRange(e, SourceKind_Unknown, SourceKind_Isaac)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesSourceKind()[index];
+}
+
+enum Message : uint8_t {
+  Message_NONE = 0,
+  Message_VideoFrame = 1,
+  Message_Calibration = 2,
+  Message_CalibrationRequest = 3,
+  Message_RobotState = 4,
+  Message_Signals = 5,
+  Message_MIN = Message_NONE,
+  Message_MAX = Message_Signals
+};
+
+inline const Message (&EnumValuesMessage())[6] {
+  static const Message values[] = {
+    Message_NONE,
+    Message_VideoFrame,
+    Message_Calibration,
+    Message_CalibrationRequest,
+    Message_RobotState,
+    Message_Signals
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesMessage() {
+  static const char * const names[7] = {
+    "NONE",
+    "VideoFrame",
+    "Calibration",
+    "CalibrationRequest",
+    "RobotState",
+    "Signals",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameMessage(Message e) {
+  if (::flatbuffers::IsOutRange(e, Message_NONE, Message_Signals)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesMessage()[index];
+}
+
+template<typename T> struct MessageTraits {
+  static const Message enum_value = Message_NONE;
+};
+
+template<> struct MessageTraits<robros::vr::VideoFrame> {
+  static const Message enum_value = Message_VideoFrame;
+};
+
+template<> struct MessageTraits<robros::vr::Calibration> {
+  static const Message enum_value = Message_Calibration;
+};
+
+template<> struct MessageTraits<robros::vr::CalibrationRequest> {
+  static const Message enum_value = Message_CalibrationRequest;
+};
+
+template<> struct MessageTraits<robros::vr::RobotState> {
+  static const Message enum_value = Message_RobotState;
+};
+
+template<> struct MessageTraits<robros::vr::Signals> {
+  static const Message enum_value = Message_Signals;
+};
+
+template <bool B = false>
+bool VerifyMessage(::flatbuffers::VerifierTemplate<B> &verifier, const void *obj, Message type);
+template <bool B = false>
+bool VerifyMessageVector(::flatbuffers::VerifierTemplate<B> &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types);
 
 FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) Pose FLATBUFFERS_FINAL_CLASS {
  private:
@@ -416,56 +541,782 @@ inline ::flatbuffers::Offset<VRState> CreateVRStateDirect(
       record_toggle_count);
 }
 
-struct SimStatus FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef SimStatusBuilder Builder;
+struct VideoFrame FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef VideoFrameBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_TIMESTAMP_NS = 4,
-    VT_RECORDING = 6
+    VT_CODEC = 4,
+    VT_WIDTH = 6,
+    VT_HEIGHT = 8,
+    VT_IS_KEY = 10,
+    VT_DATA = 12
   };
-  uint64_t timestamp_ns() const {
-    return GetField<uint64_t>(VT_TIMESTAMP_NS, 0);
+  uint8_t codec() const {
+    return GetField<uint8_t>(VT_CODEC, 1);
   }
-  bool recording() const {
-    return GetField<uint8_t>(VT_RECORDING, 0) != 0;
+  uint32_t width() const {
+    return GetField<uint32_t>(VT_WIDTH, 0);
+  }
+  uint32_t height() const {
+    return GetField<uint32_t>(VT_HEIGHT, 0);
+  }
+  bool is_key() const {
+    return GetField<uint8_t>(VT_IS_KEY, 0) != 0;
+  }
+  const ::flatbuffers::Vector<uint8_t> *data() const {
+    return GetPointer<const ::flatbuffers::Vector<uint8_t> *>(VT_DATA);
   }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint64_t>(verifier, VT_TIMESTAMP_NS, 8) &&
-           VerifyField<uint8_t>(verifier, VT_RECORDING, 1) &&
+           VerifyField<uint8_t>(verifier, VT_CODEC, 1) &&
+           VerifyField<uint32_t>(verifier, VT_WIDTH, 4) &&
+           VerifyField<uint32_t>(verifier, VT_HEIGHT, 4) &&
+           VerifyField<uint8_t>(verifier, VT_IS_KEY, 1) &&
+           VerifyOffset(verifier, VT_DATA) &&
+           verifier.VerifyVector(data()) &&
            verifier.EndTable();
   }
 };
 
-struct SimStatusBuilder {
-  typedef SimStatus Table;
+struct VideoFrameBuilder {
+  typedef VideoFrame Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_timestamp_ns(uint64_t timestamp_ns) {
-    fbb_.AddElement<uint64_t>(SimStatus::VT_TIMESTAMP_NS, timestamp_ns, 0);
+  void add_codec(uint8_t codec) {
+    fbb_.AddElement<uint8_t>(VideoFrame::VT_CODEC, codec, 1);
   }
-  void add_recording(bool recording) {
-    fbb_.AddElement<uint8_t>(SimStatus::VT_RECORDING, static_cast<uint8_t>(recording), 0);
+  void add_width(uint32_t width) {
+    fbb_.AddElement<uint32_t>(VideoFrame::VT_WIDTH, width, 0);
   }
-  explicit SimStatusBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  void add_height(uint32_t height) {
+    fbb_.AddElement<uint32_t>(VideoFrame::VT_HEIGHT, height, 0);
+  }
+  void add_is_key(bool is_key) {
+    fbb_.AddElement<uint8_t>(VideoFrame::VT_IS_KEY, static_cast<uint8_t>(is_key), 0);
+  }
+  void add_data(::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> data) {
+    fbb_.AddOffset(VideoFrame::VT_DATA, data);
+  }
+  explicit VideoFrameBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<SimStatus> Finish() {
+  ::flatbuffers::Offset<VideoFrame> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<SimStatus>(end);
+    auto o = ::flatbuffers::Offset<VideoFrame>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<SimStatus> CreateSimStatus(
+inline ::flatbuffers::Offset<VideoFrame> CreateVideoFrame(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint64_t timestamp_ns = 0,
-    bool recording = false) {
-  SimStatusBuilder builder_(_fbb);
-  builder_.add_timestamp_ns(timestamp_ns);
+    uint8_t codec = 1,
+    uint32_t width = 0,
+    uint32_t height = 0,
+    bool is_key = false,
+    ::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> data = 0) {
+  VideoFrameBuilder builder_(_fbb);
+  builder_.add_data(data);
+  builder_.add_height(height);
+  builder_.add_width(width);
+  builder_.add_is_key(is_key);
+  builder_.add_codec(codec);
+  return builder_.Finish();
+}
+
+inline ::flatbuffers::Offset<VideoFrame> CreateVideoFrameDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint8_t codec = 1,
+    uint32_t width = 0,
+    uint32_t height = 0,
+    bool is_key = false,
+    const std::vector<uint8_t> *data = nullptr) {
+  auto data__ = data ? _fbb.CreateVector<uint8_t>(*data) : 0;
+  return robros::vr::CreateVideoFrame(
+      _fbb,
+      codec,
+      width,
+      height,
+      is_key,
+      data__);
+}
+
+struct CameraModel FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef CameraModelBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_FX = 4,
+    VT_FY = 6,
+    VT_CX = 8,
+    VT_CY = 10,
+    VT_K1 = 12,
+    VT_K2 = 14,
+    VT_K3 = 16,
+    VT_K4 = 18,
+    VT_R = 20
+  };
+  float fx() const {
+    return GetField<float>(VT_FX, 0.0f);
+  }
+  float fy() const {
+    return GetField<float>(VT_FY, 0.0f);
+  }
+  float cx() const {
+    return GetField<float>(VT_CX, 0.0f);
+  }
+  float cy() const {
+    return GetField<float>(VT_CY, 0.0f);
+  }
+  float k1() const {
+    return GetField<float>(VT_K1, 0.0f);
+  }
+  float k2() const {
+    return GetField<float>(VT_K2, 0.0f);
+  }
+  float k3() const {
+    return GetField<float>(VT_K3, 0.0f);
+  }
+  float k4() const {
+    return GetField<float>(VT_K4, 0.0f);
+  }
+  const ::flatbuffers::Vector<float> *r() const {
+    return GetPointer<const ::flatbuffers::Vector<float> *>(VT_R);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<float>(verifier, VT_FX, 4) &&
+           VerifyField<float>(verifier, VT_FY, 4) &&
+           VerifyField<float>(verifier, VT_CX, 4) &&
+           VerifyField<float>(verifier, VT_CY, 4) &&
+           VerifyField<float>(verifier, VT_K1, 4) &&
+           VerifyField<float>(verifier, VT_K2, 4) &&
+           VerifyField<float>(verifier, VT_K3, 4) &&
+           VerifyField<float>(verifier, VT_K4, 4) &&
+           VerifyOffset(verifier, VT_R) &&
+           verifier.VerifyVector(r()) &&
+           verifier.EndTable();
+  }
+};
+
+struct CameraModelBuilder {
+  typedef CameraModel Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_fx(float fx) {
+    fbb_.AddElement<float>(CameraModel::VT_FX, fx, 0.0f);
+  }
+  void add_fy(float fy) {
+    fbb_.AddElement<float>(CameraModel::VT_FY, fy, 0.0f);
+  }
+  void add_cx(float cx) {
+    fbb_.AddElement<float>(CameraModel::VT_CX, cx, 0.0f);
+  }
+  void add_cy(float cy) {
+    fbb_.AddElement<float>(CameraModel::VT_CY, cy, 0.0f);
+  }
+  void add_k1(float k1) {
+    fbb_.AddElement<float>(CameraModel::VT_K1, k1, 0.0f);
+  }
+  void add_k2(float k2) {
+    fbb_.AddElement<float>(CameraModel::VT_K2, k2, 0.0f);
+  }
+  void add_k3(float k3) {
+    fbb_.AddElement<float>(CameraModel::VT_K3, k3, 0.0f);
+  }
+  void add_k4(float k4) {
+    fbb_.AddElement<float>(CameraModel::VT_K4, k4, 0.0f);
+  }
+  void add_r(::flatbuffers::Offset<::flatbuffers::Vector<float>> r) {
+    fbb_.AddOffset(CameraModel::VT_R, r);
+  }
+  explicit CameraModelBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<CameraModel> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<CameraModel>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<CameraModel> CreateCameraModel(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    float fx = 0.0f,
+    float fy = 0.0f,
+    float cx = 0.0f,
+    float cy = 0.0f,
+    float k1 = 0.0f,
+    float k2 = 0.0f,
+    float k3 = 0.0f,
+    float k4 = 0.0f,
+    ::flatbuffers::Offset<::flatbuffers::Vector<float>> r = 0) {
+  CameraModelBuilder builder_(_fbb);
+  builder_.add_r(r);
+  builder_.add_k4(k4);
+  builder_.add_k3(k3);
+  builder_.add_k2(k2);
+  builder_.add_k1(k1);
+  builder_.add_cy(cy);
+  builder_.add_cx(cx);
+  builder_.add_fy(fy);
+  builder_.add_fx(fx);
+  return builder_.Finish();
+}
+
+inline ::flatbuffers::Offset<CameraModel> CreateCameraModelDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    float fx = 0.0f,
+    float fy = 0.0f,
+    float cx = 0.0f,
+    float cy = 0.0f,
+    float k1 = 0.0f,
+    float k2 = 0.0f,
+    float k3 = 0.0f,
+    float k4 = 0.0f,
+    const std::vector<float> *r = nullptr) {
+  auto r__ = r ? _fbb.CreateVector<float>(*r) : 0;
+  return robros::vr::CreateCameraModel(
+      _fbb,
+      fx,
+      fy,
+      cx,
+      cy,
+      k1,
+      k2,
+      k3,
+      k4,
+      r__);
+}
+
+struct Calibration FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef CalibrationBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_IMAGE_WIDTH = 4,
+    VT_IMAGE_HEIGHT = 6,
+    VT_LEFT = 8,
+    VT_RIGHT = 10
+  };
+  uint32_t image_width() const {
+    return GetField<uint32_t>(VT_IMAGE_WIDTH, 0);
+  }
+  uint32_t image_height() const {
+    return GetField<uint32_t>(VT_IMAGE_HEIGHT, 0);
+  }
+  const robros::vr::CameraModel *left() const {
+    return GetPointer<const robros::vr::CameraModel *>(VT_LEFT);
+  }
+  const robros::vr::CameraModel *right() const {
+    return GetPointer<const robros::vr::CameraModel *>(VT_RIGHT);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_IMAGE_WIDTH, 4) &&
+           VerifyField<uint32_t>(verifier, VT_IMAGE_HEIGHT, 4) &&
+           VerifyOffset(verifier, VT_LEFT) &&
+           verifier.VerifyTable(left()) &&
+           VerifyOffset(verifier, VT_RIGHT) &&
+           verifier.VerifyTable(right()) &&
+           verifier.EndTable();
+  }
+};
+
+struct CalibrationBuilder {
+  typedef Calibration Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_image_width(uint32_t image_width) {
+    fbb_.AddElement<uint32_t>(Calibration::VT_IMAGE_WIDTH, image_width, 0);
+  }
+  void add_image_height(uint32_t image_height) {
+    fbb_.AddElement<uint32_t>(Calibration::VT_IMAGE_HEIGHT, image_height, 0);
+  }
+  void add_left(::flatbuffers::Offset<robros::vr::CameraModel> left) {
+    fbb_.AddOffset(Calibration::VT_LEFT, left);
+  }
+  void add_right(::flatbuffers::Offset<robros::vr::CameraModel> right) {
+    fbb_.AddOffset(Calibration::VT_RIGHT, right);
+  }
+  explicit CalibrationBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<Calibration> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<Calibration>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<Calibration> CreateCalibration(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t image_width = 0,
+    uint32_t image_height = 0,
+    ::flatbuffers::Offset<robros::vr::CameraModel> left = 0,
+    ::flatbuffers::Offset<robros::vr::CameraModel> right = 0) {
+  CalibrationBuilder builder_(_fbb);
+  builder_.add_right(right);
+  builder_.add_left(left);
+  builder_.add_image_height(image_height);
+  builder_.add_image_width(image_width);
+  return builder_.Finish();
+}
+
+struct CalibrationRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef CalibrationRequestBuilder Builder;
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           verifier.EndTable();
+  }
+};
+
+struct CalibrationRequestBuilder {
+  typedef CalibrationRequest Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  explicit CalibrationRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<CalibrationRequest> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<CalibrationRequest>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<CalibrationRequest> CreateCalibrationRequest(
+    ::flatbuffers::FlatBufferBuilder &_fbb) {
+  CalibrationRequestBuilder builder_(_fbb);
+  return builder_.Finish();
+}
+
+struct RobotState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef RobotStateBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_BODY_ACTUAL = 4,
+    VT_BODY_ACTUAL_VALID = 6,
+    VT_BODY_ACTUAL_STAMP_NS = 8,
+    VT_BODY_REFERENCE = 10,
+    VT_BODY_REFERENCE_VALID = 12,
+    VT_BODY_REFERENCE_STAMP_NS = 14,
+    VT_HAND_ACTUAL = 16,
+    VT_HAND_ACTUAL_VALID = 18,
+    VT_HAND_ACTUAL_STAMP_NS = 20,
+    VT_HAND_COMMAND = 22,
+    VT_HAND_COMMAND_VALID = 24,
+    VT_HAND_COMMAND_STAMP_NS = 26,
+    VT_BASE_POSE = 28
+  };
+  const ::flatbuffers::Vector<float> *body_actual() const {
+    return GetPointer<const ::flatbuffers::Vector<float> *>(VT_BODY_ACTUAL);
+  }
+  bool body_actual_valid() const {
+    return GetField<uint8_t>(VT_BODY_ACTUAL_VALID, 0) != 0;
+  }
+  uint64_t body_actual_stamp_ns() const {
+    return GetField<uint64_t>(VT_BODY_ACTUAL_STAMP_NS, 0);
+  }
+  const ::flatbuffers::Vector<float> *body_reference() const {
+    return GetPointer<const ::flatbuffers::Vector<float> *>(VT_BODY_REFERENCE);
+  }
+  bool body_reference_valid() const {
+    return GetField<uint8_t>(VT_BODY_REFERENCE_VALID, 0) != 0;
+  }
+  uint64_t body_reference_stamp_ns() const {
+    return GetField<uint64_t>(VT_BODY_REFERENCE_STAMP_NS, 0);
+  }
+  const ::flatbuffers::Vector<float> *hand_actual() const {
+    return GetPointer<const ::flatbuffers::Vector<float> *>(VT_HAND_ACTUAL);
+  }
+  bool hand_actual_valid() const {
+    return GetField<uint8_t>(VT_HAND_ACTUAL_VALID, 0) != 0;
+  }
+  uint64_t hand_actual_stamp_ns() const {
+    return GetField<uint64_t>(VT_HAND_ACTUAL_STAMP_NS, 0);
+  }
+  const ::flatbuffers::Vector<float> *hand_command() const {
+    return GetPointer<const ::flatbuffers::Vector<float> *>(VT_HAND_COMMAND);
+  }
+  bool hand_command_valid() const {
+    return GetField<uint8_t>(VT_HAND_COMMAND_VALID, 0) != 0;
+  }
+  uint64_t hand_command_stamp_ns() const {
+    return GetField<uint64_t>(VT_HAND_COMMAND_STAMP_NS, 0);
+  }
+  const robros::vr::Pose *base_pose() const {
+    return GetStruct<const robros::vr::Pose *>(VT_BASE_POSE);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_BODY_ACTUAL) &&
+           verifier.VerifyVector(body_actual()) &&
+           VerifyField<uint8_t>(verifier, VT_BODY_ACTUAL_VALID, 1) &&
+           VerifyField<uint64_t>(verifier, VT_BODY_ACTUAL_STAMP_NS, 8) &&
+           VerifyOffset(verifier, VT_BODY_REFERENCE) &&
+           verifier.VerifyVector(body_reference()) &&
+           VerifyField<uint8_t>(verifier, VT_BODY_REFERENCE_VALID, 1) &&
+           VerifyField<uint64_t>(verifier, VT_BODY_REFERENCE_STAMP_NS, 8) &&
+           VerifyOffset(verifier, VT_HAND_ACTUAL) &&
+           verifier.VerifyVector(hand_actual()) &&
+           VerifyField<uint8_t>(verifier, VT_HAND_ACTUAL_VALID, 1) &&
+           VerifyField<uint64_t>(verifier, VT_HAND_ACTUAL_STAMP_NS, 8) &&
+           VerifyOffset(verifier, VT_HAND_COMMAND) &&
+           verifier.VerifyVector(hand_command()) &&
+           VerifyField<uint8_t>(verifier, VT_HAND_COMMAND_VALID, 1) &&
+           VerifyField<uint64_t>(verifier, VT_HAND_COMMAND_STAMP_NS, 8) &&
+           VerifyField<robros::vr::Pose>(verifier, VT_BASE_POSE, 4) &&
+           verifier.EndTable();
+  }
+};
+
+struct RobotStateBuilder {
+  typedef RobotState Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_body_actual(::flatbuffers::Offset<::flatbuffers::Vector<float>> body_actual) {
+    fbb_.AddOffset(RobotState::VT_BODY_ACTUAL, body_actual);
+  }
+  void add_body_actual_valid(bool body_actual_valid) {
+    fbb_.AddElement<uint8_t>(RobotState::VT_BODY_ACTUAL_VALID, static_cast<uint8_t>(body_actual_valid), 0);
+  }
+  void add_body_actual_stamp_ns(uint64_t body_actual_stamp_ns) {
+    fbb_.AddElement<uint64_t>(RobotState::VT_BODY_ACTUAL_STAMP_NS, body_actual_stamp_ns, 0);
+  }
+  void add_body_reference(::flatbuffers::Offset<::flatbuffers::Vector<float>> body_reference) {
+    fbb_.AddOffset(RobotState::VT_BODY_REFERENCE, body_reference);
+  }
+  void add_body_reference_valid(bool body_reference_valid) {
+    fbb_.AddElement<uint8_t>(RobotState::VT_BODY_REFERENCE_VALID, static_cast<uint8_t>(body_reference_valid), 0);
+  }
+  void add_body_reference_stamp_ns(uint64_t body_reference_stamp_ns) {
+    fbb_.AddElement<uint64_t>(RobotState::VT_BODY_REFERENCE_STAMP_NS, body_reference_stamp_ns, 0);
+  }
+  void add_hand_actual(::flatbuffers::Offset<::flatbuffers::Vector<float>> hand_actual) {
+    fbb_.AddOffset(RobotState::VT_HAND_ACTUAL, hand_actual);
+  }
+  void add_hand_actual_valid(bool hand_actual_valid) {
+    fbb_.AddElement<uint8_t>(RobotState::VT_HAND_ACTUAL_VALID, static_cast<uint8_t>(hand_actual_valid), 0);
+  }
+  void add_hand_actual_stamp_ns(uint64_t hand_actual_stamp_ns) {
+    fbb_.AddElement<uint64_t>(RobotState::VT_HAND_ACTUAL_STAMP_NS, hand_actual_stamp_ns, 0);
+  }
+  void add_hand_command(::flatbuffers::Offset<::flatbuffers::Vector<float>> hand_command) {
+    fbb_.AddOffset(RobotState::VT_HAND_COMMAND, hand_command);
+  }
+  void add_hand_command_valid(bool hand_command_valid) {
+    fbb_.AddElement<uint8_t>(RobotState::VT_HAND_COMMAND_VALID, static_cast<uint8_t>(hand_command_valid), 0);
+  }
+  void add_hand_command_stamp_ns(uint64_t hand_command_stamp_ns) {
+    fbb_.AddElement<uint64_t>(RobotState::VT_HAND_COMMAND_STAMP_NS, hand_command_stamp_ns, 0);
+  }
+  void add_base_pose(const robros::vr::Pose *base_pose) {
+    fbb_.AddStruct(RobotState::VT_BASE_POSE, base_pose);
+  }
+  explicit RobotStateBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<RobotState> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<RobotState>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<RobotState> CreateRobotState(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<::flatbuffers::Vector<float>> body_actual = 0,
+    bool body_actual_valid = false,
+    uint64_t body_actual_stamp_ns = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<float>> body_reference = 0,
+    bool body_reference_valid = false,
+    uint64_t body_reference_stamp_ns = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<float>> hand_actual = 0,
+    bool hand_actual_valid = false,
+    uint64_t hand_actual_stamp_ns = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<float>> hand_command = 0,
+    bool hand_command_valid = false,
+    uint64_t hand_command_stamp_ns = 0,
+    const robros::vr::Pose *base_pose = nullptr) {
+  RobotStateBuilder builder_(_fbb);
+  builder_.add_hand_command_stamp_ns(hand_command_stamp_ns);
+  builder_.add_hand_actual_stamp_ns(hand_actual_stamp_ns);
+  builder_.add_body_reference_stamp_ns(body_reference_stamp_ns);
+  builder_.add_body_actual_stamp_ns(body_actual_stamp_ns);
+  builder_.add_base_pose(base_pose);
+  builder_.add_hand_command(hand_command);
+  builder_.add_hand_actual(hand_actual);
+  builder_.add_body_reference(body_reference);
+  builder_.add_body_actual(body_actual);
+  builder_.add_hand_command_valid(hand_command_valid);
+  builder_.add_hand_actual_valid(hand_actual_valid);
+  builder_.add_body_reference_valid(body_reference_valid);
+  builder_.add_body_actual_valid(body_actual_valid);
+  return builder_.Finish();
+}
+
+inline ::flatbuffers::Offset<RobotState> CreateRobotStateDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const std::vector<float> *body_actual = nullptr,
+    bool body_actual_valid = false,
+    uint64_t body_actual_stamp_ns = 0,
+    const std::vector<float> *body_reference = nullptr,
+    bool body_reference_valid = false,
+    uint64_t body_reference_stamp_ns = 0,
+    const std::vector<float> *hand_actual = nullptr,
+    bool hand_actual_valid = false,
+    uint64_t hand_actual_stamp_ns = 0,
+    const std::vector<float> *hand_command = nullptr,
+    bool hand_command_valid = false,
+    uint64_t hand_command_stamp_ns = 0,
+    const robros::vr::Pose *base_pose = nullptr) {
+  auto body_actual__ = body_actual ? _fbb.CreateVector<float>(*body_actual) : 0;
+  auto body_reference__ = body_reference ? _fbb.CreateVector<float>(*body_reference) : 0;
+  auto hand_actual__ = hand_actual ? _fbb.CreateVector<float>(*hand_actual) : 0;
+  auto hand_command__ = hand_command ? _fbb.CreateVector<float>(*hand_command) : 0;
+  return robros::vr::CreateRobotState(
+      _fbb,
+      body_actual__,
+      body_actual_valid,
+      body_actual_stamp_ns,
+      body_reference__,
+      body_reference_valid,
+      body_reference_stamp_ns,
+      hand_actual__,
+      hand_actual_valid,
+      hand_actual_stamp_ns,
+      hand_command__,
+      hand_command_valid,
+      hand_command_stamp_ns,
+      base_pose);
+}
+
+struct Signals FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef SignalsBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_RECORDING = 4,
+    VT_SOURCE = 6
+  };
+  bool recording() const {
+    return GetField<uint8_t>(VT_RECORDING, 0) != 0;
+  }
+  robros::vr::SourceKind source() const {
+    return static_cast<robros::vr::SourceKind>(GetField<uint8_t>(VT_SOURCE, 0));
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint8_t>(verifier, VT_RECORDING, 1) &&
+           VerifyField<uint8_t>(verifier, VT_SOURCE, 1) &&
+           verifier.EndTable();
+  }
+};
+
+struct SignalsBuilder {
+  typedef Signals Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_recording(bool recording) {
+    fbb_.AddElement<uint8_t>(Signals::VT_RECORDING, static_cast<uint8_t>(recording), 0);
+  }
+  void add_source(robros::vr::SourceKind source) {
+    fbb_.AddElement<uint8_t>(Signals::VT_SOURCE, static_cast<uint8_t>(source), 0);
+  }
+  explicit SignalsBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<Signals> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<Signals>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<Signals> CreateSignals(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    bool recording = false,
+    robros::vr::SourceKind source = robros::vr::SourceKind_Unknown) {
+  SignalsBuilder builder_(_fbb);
+  builder_.add_source(source);
   builder_.add_recording(recording);
   return builder_.Finish();
+}
+
+struct Envelope FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef EnvelopeBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_SCHEMA_VERSION = 4,
+    VT_SEQ = 6,
+    VT_WALL_NS = 8,
+    VT_SIM_NS = 10,
+    VT_BODY_TYPE = 12,
+    VT_BODY = 14
+  };
+  uint32_t schema_version() const {
+    return GetField<uint32_t>(VT_SCHEMA_VERSION, 2);
+  }
+  uint32_t seq() const {
+    return GetField<uint32_t>(VT_SEQ, 0);
+  }
+  uint64_t wall_ns() const {
+    return GetField<uint64_t>(VT_WALL_NS, 0);
+  }
+  uint64_t sim_ns() const {
+    return GetField<uint64_t>(VT_SIM_NS, 0);
+  }
+  robros::vr::Message body_type() const {
+    return static_cast<robros::vr::Message>(GetField<uint8_t>(VT_BODY_TYPE, 0));
+  }
+  const void *body() const {
+    return GetPointer<const void *>(VT_BODY);
+  }
+  template<typename T> const T *body_as() const;
+  const robros::vr::VideoFrame *body_as_VideoFrame() const {
+    return body_type() == robros::vr::Message_VideoFrame ? static_cast<const robros::vr::VideoFrame *>(body()) : nullptr;
+  }
+  const robros::vr::Calibration *body_as_Calibration() const {
+    return body_type() == robros::vr::Message_Calibration ? static_cast<const robros::vr::Calibration *>(body()) : nullptr;
+  }
+  const robros::vr::CalibrationRequest *body_as_CalibrationRequest() const {
+    return body_type() == robros::vr::Message_CalibrationRequest ? static_cast<const robros::vr::CalibrationRequest *>(body()) : nullptr;
+  }
+  const robros::vr::RobotState *body_as_RobotState() const {
+    return body_type() == robros::vr::Message_RobotState ? static_cast<const robros::vr::RobotState *>(body()) : nullptr;
+  }
+  const robros::vr::Signals *body_as_Signals() const {
+    return body_type() == robros::vr::Message_Signals ? static_cast<const robros::vr::Signals *>(body()) : nullptr;
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_SCHEMA_VERSION, 4) &&
+           VerifyField<uint32_t>(verifier, VT_SEQ, 4) &&
+           VerifyField<uint64_t>(verifier, VT_WALL_NS, 8) &&
+           VerifyField<uint64_t>(verifier, VT_SIM_NS, 8) &&
+           VerifyField<uint8_t>(verifier, VT_BODY_TYPE, 1) &&
+           VerifyOffset(verifier, VT_BODY) &&
+           VerifyMessage(verifier, body(), body_type()) &&
+           verifier.EndTable();
+  }
+};
+
+template<> inline const robros::vr::VideoFrame *Envelope::body_as<robros::vr::VideoFrame>() const {
+  return body_as_VideoFrame();
+}
+
+template<> inline const robros::vr::Calibration *Envelope::body_as<robros::vr::Calibration>() const {
+  return body_as_Calibration();
+}
+
+template<> inline const robros::vr::CalibrationRequest *Envelope::body_as<robros::vr::CalibrationRequest>() const {
+  return body_as_CalibrationRequest();
+}
+
+template<> inline const robros::vr::RobotState *Envelope::body_as<robros::vr::RobotState>() const {
+  return body_as_RobotState();
+}
+
+template<> inline const robros::vr::Signals *Envelope::body_as<robros::vr::Signals>() const {
+  return body_as_Signals();
+}
+
+struct EnvelopeBuilder {
+  typedef Envelope Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_schema_version(uint32_t schema_version) {
+    fbb_.AddElement<uint32_t>(Envelope::VT_SCHEMA_VERSION, schema_version, 2);
+  }
+  void add_seq(uint32_t seq) {
+    fbb_.AddElement<uint32_t>(Envelope::VT_SEQ, seq, 0);
+  }
+  void add_wall_ns(uint64_t wall_ns) {
+    fbb_.AddElement<uint64_t>(Envelope::VT_WALL_NS, wall_ns, 0);
+  }
+  void add_sim_ns(uint64_t sim_ns) {
+    fbb_.AddElement<uint64_t>(Envelope::VT_SIM_NS, sim_ns, 0);
+  }
+  void add_body_type(robros::vr::Message body_type) {
+    fbb_.AddElement<uint8_t>(Envelope::VT_BODY_TYPE, static_cast<uint8_t>(body_type), 0);
+  }
+  void add_body(::flatbuffers::Offset<void> body) {
+    fbb_.AddOffset(Envelope::VT_BODY, body);
+  }
+  explicit EnvelopeBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<Envelope> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<Envelope>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<Envelope> CreateEnvelope(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t schema_version = 2,
+    uint32_t seq = 0,
+    uint64_t wall_ns = 0,
+    uint64_t sim_ns = 0,
+    robros::vr::Message body_type = robros::vr::Message_NONE,
+    ::flatbuffers::Offset<void> body = 0) {
+  EnvelopeBuilder builder_(_fbb);
+  builder_.add_sim_ns(sim_ns);
+  builder_.add_wall_ns(wall_ns);
+  builder_.add_body(body);
+  builder_.add_seq(seq);
+  builder_.add_schema_version(schema_version);
+  builder_.add_body_type(body_type);
+  return builder_.Finish();
+}
+
+template <bool B>
+inline bool VerifyMessage(::flatbuffers::VerifierTemplate<B> &verifier, const void *obj, Message type) {
+  switch (type) {
+    case Message_NONE: {
+      return true;
+    }
+    case Message_VideoFrame: {
+      auto ptr = reinterpret_cast<const robros::vr::VideoFrame *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case Message_Calibration: {
+      auto ptr = reinterpret_cast<const robros::vr::Calibration *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case Message_CalibrationRequest: {
+      auto ptr = reinterpret_cast<const robros::vr::CalibrationRequest *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case Message_RobotState: {
+      auto ptr = reinterpret_cast<const robros::vr::RobotState *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case Message_Signals: {
+      auto ptr = reinterpret_cast<const robros::vr::Signals *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    default: return true;
+  }
+}
+
+template <bool B>
+inline bool VerifyMessageVector(::flatbuffers::VerifierTemplate<B> &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types) {
+  if (!values || !types) return !values && !types;
+  if (values->size() != types->size()) return false;
+  for (::flatbuffers::uoffset_t i = 0; i < values->size(); ++i) {
+    if (!VerifyMessage(
+        verifier,  values->Get(i), types->GetEnum<Message>(i))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 inline const robros::vr::VRState *GetVRState(const void *buf) {
