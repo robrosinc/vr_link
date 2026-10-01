@@ -6,7 +6,7 @@ then per frame Signals -> RobotState -> VideoFrame); port 9101 answers a
 robot-state sources differ between modes::
 
     vr-link-stream --source usb   [--config stream_usb.yaml]   NUC USB camera + robot DDS state
-    vr-link-stream --source dds   [--config stream_dds.yaml]   Jetson camera topic + robot DDS state
+    vr-link-stream --source dds   [--config stream_dds.yaml]   igris_c_camera DDS topic + robot DDS state
     vr-link-stream --source shm   [--config stream_shm.yaml]   simulator SHM (video + state) [+ DDS reference]
     vr-link-stream --source none  [--config state_only.yaml]   no camera: RobotState/Signals only
 
@@ -123,7 +123,7 @@ def build_calibration_provider(cfg: PumpConfig, source: Optional[FrameSource]) -
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="VRL2 downlink sender: stereo H.264 + calibration + robot state (USB camera, DDS camera, simulator SHM, or state only)")
-    p.add_argument("--source", required=True, choices=("usb", "dds", "shm", "none", "mujoco"), help="frame source ('mujoco' = shm)")
+    p.add_argument("--source", required=True, choices=("usb", "dds", "shm", "none"), help="frame source")
     p.add_argument("--config", default=None, metavar="PATH", help="config YAML (default: $VR_LINK_STREAM_CONFIG or the packaged default for --source)")
     p.add_argument("--port", type=int, default=None, help="override tcp.port")
     p.add_argument("--calibration-port", type=int, default=None, help="override calibration.port")

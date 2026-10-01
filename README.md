@@ -248,7 +248,8 @@ contract: hit-bench binds GMR's
 
 ```
 vr-link-stream --source usb   [--config stream_usb.yaml]  --dds-namespace igris_c_XXXX   NUC USB camera + robot DDS state
-vr-link-stream --source dds   [--config stream_dds.yaml]  --dds-namespace igris_c_XXXX   Jetson camera topic + robot DDS state
+vr-link-stream --source dds   [--config stream_dds.yaml]  --dds-namespace igris_c_XXXX   igris_c_camera DDS topic + robot DDS state
+vr-link-stream --source dds   --config stream_dds_mujoco.yaml --dds-namespace igris_c_XXXX  MuJoCo publishing the same DDS contract (ideal calibration from the file)
 vr-link-stream --source shm   [--config stream_shm.yaml]                                simulator segment (video + state)
 vr-link-stream --source none  [--config state_only.yaml]  --dds-namespace igris_c_XXXX   no camera: RobotState/Signals only
 ```
@@ -286,7 +287,8 @@ pixi run test                       # pytest (loopback and temp-file tests, no h
 pixi run install-sdk                # igris_c_sdk wheel from thirdparty/igris_c_sdk/dist (human-built)
 pixi run shm-tcp-stream             # vr-link-stream --source shm
 pixi run camera-tcp-stream -- --dds-namespace igris_c_XXXX
-pixi run jetson-tcp-stream -- --dds-namespace igris_c_XXXX
+pixi run dds-tcp-stream -- --dds-namespace igris_c_XXXX [--dds-domain N]   # igris_c_camera on <ns>/sensor/eyes_stereo/compressed
+pixi run dds-tcp-stream-mujoco -- --dds-namespace igris_c_XXXX [--dds-domain N]   # igris_c_mujoco vision_dds_sink on the same topic
 pixi run state-only-stream -- --dds-namespace igris_c_XXXX
 pixi run capture-checkerboard          # -> local/captures/<ts>/
 pixi run calibrate-cams -- --serve-as igris_c_eyes_stereo_unreal.yaml   # newest capture -> local/calibration/<ts>/ + served file

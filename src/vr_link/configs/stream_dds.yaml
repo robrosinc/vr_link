@@ -1,8 +1,10 @@
 # VRL2 downlink fed by the robot's eyes_stereo DDS topic (JPEG) + the robot's DDS state.
-#   vr-link-stream --source dds [--config this-file] [--dds-namespace igris_c_XXXX]
+#   vr-link-stream --source dds [--config this-file] [--dds-namespace igris_c_XXXX] [--dds-domain N]
 # Needs the igris_c_sdk Python binding (pixi run install-sdk, or IGRIS_C_SDK_ROOT).
-# NOTE (verification owner: operator): confirm camera_topic and the namespace
-# against the deployed igris_c_camera / bridge configuration.
+# Matches igris_c_camera (direct mode, camera on the NUC, igris_c_camera >= 2026-09-10):
+# CompressedImage_ on <ns>/sensor/eyes_stereo/compressed, frame_id "stereo_image",
+# header.stamp = acquisition time. dds.domain_id, namespace and topic_naming must equal
+# the robot's robot.yaml igris_c.network.* values (the camera reads the same keys).
 
 eyes_stereo:
   resolution: [1280, 480]   # frames are resized to this SBS size before encoding; must match the served calibration's mode
@@ -24,12 +26,12 @@ calibration:
   yaml: "local:calibration/igris_c_eyes_stereo_unreal.yaml"   # vr-link-calibrate-cams ... --serve-as igris_c_eyes_stereo_unreal.yaml
 
 dds:
-  domain_id: 1
-  namespace: ""             # REQUIRED
-  topic_naming: native
+  domain_id: 1              # robot.yaml igris_c.network.cyclonedds.domain_id (or --dds-domain)
+  namespace: ""             # REQUIRED: the robot's namespace, igris_c_<suffix> (or --dds-namespace)
+  topic_naming: native      # robot.yaml igris_c.network.dds_topic_naming
   config_uri: ""            # CycloneDDS XML path/URI; empty honours $CYCLONEDDS_URI / defaults
-  camera_topic: "igris_c/sensor/eyes_stereo/compressed"   # igris_c_camera publishes CompressedImage_ on <topic>/compressed
-  frame_id: ""              # drop samples whose header.frame_id differs (empty = accept all)
+  camera_topic: "sensor/eyes_stereo/compressed"   # bare name; the channel prefixes the namespace
+  frame_id: ""              # drop samples whose header.frame_id differs (empty = accept all; the camera sends "stereo_image")
   topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate}
   buffer_capacity: 512
 

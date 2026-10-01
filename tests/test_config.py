@@ -38,13 +38,28 @@ def test_dds_fields_and_topics(tmp_path):
     assert cfg.dds.topics.lowstate == "rt_low" and cfg.dds.topics.refstate == "gmr/refstate"
 
 
-def test_mujoco_alias_and_legacy_keys(tmp_path):
-    assert config.normalize_source_kind("mujoco") == "shm"
-    assert config.default_config_path("mujoco") == config.default_config_path("shm")
+def test_unknown_source_kind_is_rejected():
+    with pytest.raises(config.ConfigError):
+        config.normalize_source_kind("mujoco")  # the 1.x alias for shm is gone
+
+
+def test_shm_section_and_legacy_camera_topic_key(tmp_path):
     path = tmp_path / "s.yaml"
-    path.write_text("mujoco: {shm_name: /x}\ndds: {topic: cam/raw, namespace: n}\n", encoding="utf-8")
-    cfg = config.load_pump_config(path, "mujoco")
+    path.write_text("shm: {shm_name: /x}\ndds: {topic: cam/raw, namespace: n}\n", encoding="utf-8")
+    cfg = config.load_pump_config(path, "shm")
     assert cfg.source_kind == "shm" and cfg.shm.shm_name == "/x" and cfg.dds.camera_topic == "cam/raw"
+
+
+def test_packaged_mujoco_dds_config_loads():
+    # MuJoCo over DDS: the camera topic carries no camera metadata, so the ideal rig comes from
+    # the file; the HUD label is MuJoCo. Everything else matches stream_dds.yaml.
+    path = config.packaged_path("configs/stream_dds_mujoco.yaml")
+    cfg = config.load_pump_config(path, "dds")
+    assert cfg.calibration.provider == "ideal_from_config" and cfg.calibration.ideal.fovy_deg == 90.0
+    assert cfg.signals.source is SourceKind.MUJOCO and cfg.signals.recording == "none"
+    assert cfg.dds.camera_topic == "sensor/eyes_stereo/compressed" and cfg.dds.namespace == ""
+    assert cfg.robot_state.dds_fields() == {"actual", "reference", "hand_actual", "hand_command"}
+    assert cfg.robot_state.base_pose == "none"
 
 
 def test_relative_paths_resolve_against_the_config_file(tmp_path):

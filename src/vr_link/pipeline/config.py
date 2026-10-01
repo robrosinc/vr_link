@@ -9,7 +9,7 @@ and adds the robot-state sources::
                   request_timeout, ideal: {fovy_deg, toe_out_deg, baseline_mm}}
     dds:         {domain_id, namespace, topic_naming, config_uri, camera_topic, frame_id,
                   topics: {lowstate, handstate, handcmd, refstate}, buffer_capacity}
-    shm:         {shm_name, read_timeout_sec}            (legacy key: mujoco)
+    shm:         {shm_name, read_timeout_sec}
     robot_state: {actual, reference, hand_actual, hand_command, base_pose,
                   tolerances_ms: {actual, reference, hand_actual, hand_command}}
     signals:     {source, recording}
@@ -47,7 +47,6 @@ PKG_PREFIX = "pkg:"
 LOCAL_PREFIX = "local:"
 DATA_PREFIX = "data:"  # 1.x spelling of pkg:; still accepted
 SOURCE_KINDS = ("usb", "dds", "shm", "none")
-SOURCE_ALIASES = {"mujoco": "shm"}  # 1.x name
 CALIBRATION_PROVIDERS = ("yaml", "json", "ideal_from_source", "ideal_from_config")
 DEFAULT_CONFIG_FILES = {"usb": "stream_usb.yaml", "dds": "stream_dds.yaml", "shm": "stream_shm.yaml", "none": "state_only.yaml"}
 
@@ -108,7 +107,7 @@ def resolve_data_path(value: PathLike, *, base_dir: Optional[Path] = None) -> Pa
 
 
 def normalize_source_kind(source_kind: str) -> str:
-    kind = SOURCE_ALIASES.get(str(source_kind), str(source_kind))
+    kind = str(source_kind)
     if kind not in SOURCE_KINDS:
         raise ConfigError(f"unknown source kind {source_kind!r} (expected one of {SOURCE_KINDS})")
     return kind
@@ -185,7 +184,7 @@ class DdsConfig:
     namespace: str = ""
     topic_naming: str = "native"
     config_uri: str = ""
-    camera_topic: str = "igris_c/sensor/eyes_stereo/compressed"
+    camera_topic: str = "sensor/eyes_stereo/compressed"
     frame_id: Optional[str] = None
     topics: DdsStateTopics = field(default_factory=DdsStateTopics)
     buffer_capacity: int = 512
@@ -263,7 +262,7 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
     tcp = _section(data, "tcp")
     cal = _section(data, "calibration")
     dds = _section(data, "dds")
-    shm = _section(data, "shm", "mujoco")
+    shm = _section(data, "shm")
     robot = _section(data, "robot_state")
     signals_raw = _section(data, "signals")
     state_only_raw = _section(data, "state_only")

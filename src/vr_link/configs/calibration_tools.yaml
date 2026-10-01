@@ -52,5 +52,5 @@ dds:
   domain_id: 1
   namespace: ""             # REQUIRED for dds: the robot's namespace (e.g. igris_c_XXXX)
   topic_naming: native      # native | ros_compatible (must match the robot bridge)
-  camera_topic: "igris_c/sensor/eyes_stereo/compressed"   # bare name; igris_c_camera publishes CompressedImage_ on <topic>/compressed
+  camera_topic: "sensor/eyes_stereo/compressed"   # bare name; igris_c_camera publishes CompressedImage_ on <base>/compressed
   config_uri: ""

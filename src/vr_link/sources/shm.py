@@ -404,8 +404,6 @@ class ShmSource:
             time.sleep(self.poll_sec)
 
 
-MujocoShmSource = ShmSource  # 1.x name
-
 __all__ = [
     "DEFAULT_SHM_NAME",
     "HEADER_V1_FORMAT",
@@ -415,7 +413,6 @@ __all__ = [
     "HEADER_V3_FORMAT",
     "HEADER_V3_SIZE",
     "LAYOUT_VERSION",
-    "MujocoShmSource",
     "ShmSource",
     "SHM_MAGIC_BASE",
     "ShmHeader",

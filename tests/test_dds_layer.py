@@ -229,7 +229,7 @@ def test_dds_camera_source_keeps_newest_sample(fake_sdk):
     from vr_link.sources.dds_camera import DdsCameraSource
 
     channel = DdsChannel.create(domain_id=0, namespace="igris_c_x", sdk=fake_sdk)
-    source = DdsCameraSource(channel, "igris_c/sensor/eyes_stereo/compressed")
+    source = DdsCameraSource(channel, "sensor/eyes_stereo/compressed")
     source.open()
     fake = fake_sdk.registry["CompressedImageSubscriber"][0]
     ok, jpeg = cv2.imencode(".jpg", np.full((4, 8, 3), 200, np.uint8))

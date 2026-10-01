@@ -1,0 +1,53 @@
+# VRL2 downlink fed by igris_c_mujoco over DDS: the simulator publishes the igris_c_camera
+# contract (CompressedImage_ on <ns>/sensor/eyes_stereo/compressed, vision_dds_sink) and
+# bridge_sim publishes lowstate, so the receive path is identical to the real robot.
+#   vr-link-stream --source dds --config this-file --dds-namespace igris_c_XXXX [--dds-domain N]
+#   pixi run dds-tcp-stream-mujoco -- --dds-namespace igris_c_XXXX
+# Differs from stream_dds.yaml only where the simulator differs from the camera: the DDS
+# frame carries no camera metadata, so the ideal rig calibration comes from this file
+# (igris_c_v2_vision.xml.xacro values), and the HUD label is MuJoCo. base_pose and the
+# recording flag only exist on the SHM lane (stream_shm.yaml).
+
+eyes_stereo:
+  resolution: [1280, 480]   # igris_c_mujoco vision_shm.h geometry; frames are resized to this if they differ
+  fps: 30
+  enable_stereo: true
+
+tcp:
+  host: "0.0.0.0"
+  port: 9100
+  bitrate: 8000000
+  gop: 30
+  encoder: "sw"
+
+calibration:
+  enable: true
+  host: "0.0.0.0"
+  port: 9101
+  provider: ideal_from_config   # the DDS camera source has no camera metadata (unlike SHM layout >= 2)
+  ideal:
+    fovy_deg: 90.0            # igris_c_v2_vision.xml.xacro
+    toe_out_deg: 14.0
+    baseline_mm: 52.152       # 2 * 0.026076 m
+
+dds:
+  domain_id: 0              # robot.yaml igris_c.network.cyclonedds.domain_id of the sim stack (or --dds-domain)
+  namespace: ""             # REQUIRED: the sim stack's namespace, igris_c_<suffix> (or --dds-namespace)
+  topic_naming: native      # robot.yaml igris_c.network.dds_topic_naming
+  config_uri: ""            # CycloneDDS XML path/URI; empty honours $CYCLONEDDS_URI / defaults
+  camera_topic: "sensor/eyes_stereo/compressed"   # bare name; the channel prefixes the namespace
+  frame_id: "" 
+  topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate}
+  buffer_capacity: 512
+
+robot_state:
+  actual: dds               # bridge_sim lowstate (needs the MuJoCo simulation un-paused)
+  reference: dds            # gmr/refstate from igris_c_gmr; invalid when it is not running
+  hand_actual: dds
+  hand_command: dds         # handcmd from igris_c_gmr; invalid when it is not running
+  base_pose: none           # SHM lane only
+  tolerances_ms: {actual: 5, reference: 15, hand_actual: 40, hand_command: 40}
+
+signals:
+  source: mujoco
+  recording: none           # SHM lane only

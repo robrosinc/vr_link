@@ -22,8 +22,9 @@ from . import Frame, StereoCameraMetadata
 
 logger = logging.getLogger(__name__)
 
-# igris_c_camera's dds sink publishes CompressedImage_ on "<topic>/compressed".
-DEFAULT_DDS_CAMERA_TOPIC = "igris_c/sensor/eyes_stereo/compressed"
+# igris_c_camera's dds sink publishes CompressedImage_ on "<base>/compressed"; the SDK
+# channel prefixes the robot namespace (wire: "<ns>/sensor/eyes_stereo/compressed").
+DEFAULT_DDS_CAMERA_TOPIC = "sensor/eyes_stereo/compressed"
 
 
 def normalize_frame_id(value: Any) -> str:

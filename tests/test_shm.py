@@ -86,7 +86,7 @@ def test_unknown_layouts_are_rejected(magic):
 
 def test_reads_frames_with_sim_time_and_metadata(tmp_path):
     path = _segment(tmp_path / "seg", version=2, seq=2, index=1, stamp=1_000, sim=20_000)
-    source = shm.MujocoShmSource(path=path, poll_sec=0.001, retry_sec=0.01)
+    source = shm.ShmSource(path=path, poll_sec=0.001, retry_sec=0.01)
     source.open()
     try:
         frame = source.read(timeout=0.5)
@@ -124,7 +124,7 @@ def test_v3_frames_carry_the_robot_block_and_read_state_is_header_only(tmp_path)
 
 def test_odd_seq_is_a_write_in_progress(tmp_path):
     path = _segment(tmp_path / "seg", version=1, seq=3, index=1)
-    source = shm.MujocoShmSource(path=path, poll_sec=0.001, retry_sec=0.01)
+    source = shm.ShmSource(path=path, poll_sec=0.001, retry_sec=0.01)
     source.open()
     try:
         assert source.read(timeout=0.05) is None
@@ -135,7 +135,7 @@ def test_odd_seq_is_a_write_in_progress(tmp_path):
 
 
 def test_missing_segment_waits_without_raising(tmp_path):
-    source = shm.MujocoShmSource(path=tmp_path / "absent", poll_sec=0.001, retry_sec=0.01)
+    source = shm.ShmSource(path=tmp_path / "absent", poll_sec=0.001, retry_sec=0.01)
     source.open()
     try:
         assert source.read(timeout=0.05) is None
