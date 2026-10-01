@@ -291,7 +291,10 @@ pixi run dds-tcp-stream -- --dds-namespace igris_c_XXXX [--dds-domain N]   # igr
 pixi run dds-tcp-stream-mujoco -- --dds-namespace igris_c_XXXX [--dds-domain N]   # igris_c_mujoco vision_dds_sink on the same topic
 pixi run state-only-stream -- --dds-namespace igris_c_XXXX
 pixi run capture-checkerboard          # -> local/captures/<ts>/
+pixi run capture-checkerboard-headless # same output, no window: robot NUC over SSH (stop igris-c-camera.service first), then scp the folder
+pixi run focus-check                   # live per-eye sharpness (Laplacian variance) in the terminal: turn a lens ring until L and R agree
 pixi run calibrate-cams -- --serve-as igris_c_eyes_stereo_unreal.yaml   # newest capture -> local/calibration/<ts>/ + served file
+pixi run calibrate-cams -- --input-dir local/captures/<ts> --serve-as igris_c_eyes_stereo_unreal.yaml   # a folder copied from the NUC
 pixi run make-mujoco-calibration       # -> local/calibration/mujoco_stereo_calibration.yaml (reference only; the shm stream computes its own)
 ```
 

@@ -46,6 +46,8 @@ vr-link-stream = "vr_link.cli.stream:main"
 vr-link-make-calibration = "vr_link.cli.make_calibration:main"
 vr-link-calibration-fov = "vr_link.cli.calibration_fov:main"
 vr-link-capture-checkerboard = "vr_link.tools.capture_checkerboard:main"
+vr-link-capture-checkerboard-headless = "vr_link.tools.capture_checkerboard_headless:main"
+vr-link-focus-check = "vr_link.tools.focus_check:main"
 vr-link-calibrate-cams = "vr_link.tools.calibrate_cams:main"
 
 [tool.setuptools]
@@ -114,6 +116,10 @@ make-mujoco-calibration = "vr-link-make-calibration"
 
 [tool.pixi.feature.calibration.tasks]
 capture-checkerboard = "vr-link-capture-checkerboard"
+# No window: for the robot NUC over SSH (a forwarded imshow lags and blurs the shots).
+capture-checkerboard-headless = "vr-link-capture-checkerboard-headless"
+# Live per-eye Laplacian sharpness in the terminal: lens focus adjustment over SSH.
+focus-check = "vr-link-focus-check"
 calibrate-cams = "vr-link-calibrate-cams"
 calibration-fov = "vr-link-calibration-fov"
 
