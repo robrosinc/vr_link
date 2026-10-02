@@ -53,7 +53,7 @@ class _DdsCapture:
         from vr_link.network.dds import DdsChannel, resolve_config_uri
         from vr_link.sources.dds_camera import DEFAULT_DDS_CAMERA_TOPIC, DdsCameraSource
 
-        domain_id = args.domain_id if args.domain_id is not None else int(dds_config.get("domain_id", 1))
+        domain_id = args.domain_id if args.domain_id is not None else int(dds_config.get("domain_id", 0))
         namespace = args.namespace if args.namespace is not None else str(dds_config.get("namespace", ""))
         topic = args.topic if args.topic is not None else str(dds_config.get("camera_topic") or dds_config.get("topic") or DEFAULT_DDS_CAMERA_TOPIC)
         raw_uri = args.dds_config if args.dds_config is not None else (dds_config.get("config_uri") or dds_config.get("config"))

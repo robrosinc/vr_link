@@ -8,7 +8,6 @@ robot-state sources differ between modes::
     vr-link-stream --source usb   [--config stream_usb.yaml]   NUC USB camera + robot DDS state
     vr-link-stream --source dds   [--config stream_dds.yaml]   igris_c_camera DDS topic + robot DDS state
     vr-link-stream --source shm   [--config stream_shm.yaml]   simulator SHM (video + state) [+ DDS reference]
-    vr-link-stream --source none  [--config state_only.yaml]   no camera: RobotState/Signals only
 
 Calibration providers (``calibration.provider``): ``yaml`` / ``json`` serve a
 file (measured hardware calibration); ``ideal_from_source`` computes the ideal
@@ -31,7 +30,6 @@ from vr_link.network.tcp_server import EnvelopeTcpServer
 from vr_link.pipeline.config import PumpConfig, load_pump_config, normalize_source_kind, resolve_config_path
 from vr_link.pipeline.pump import StreamPump
 from vr_link.pipeline.robot_state import DdsStateBuffers, RobotStateAssembler, SignalsProvider
-from vr_link.pipeline.state_only import StateOnlyPump
 from vr_link.sources import FrameSource
 from vr_link.video.encoder import resolve_h264_encoder
 
@@ -62,7 +60,7 @@ class DdsRuntime:
         self.channel.release()
 
 
-def build_source(cfg: PumpConfig, dds: Optional[DdsRuntime]) -> Optional[FrameSource]:
+def build_source(cfg: PumpConfig, dds: Optional[DdsRuntime]) -> FrameSource:
     if cfg.source_kind == "usb":
         from vr_link.sources.usb import UsbStereoSource
 
@@ -79,12 +77,10 @@ def build_source(cfg: PumpConfig, dds: Optional[DdsRuntime]) -> Optional[FrameSo
         from vr_link.sources.shm import ShmSource
 
         return ShmSource(cfg.shm.shm_name)
-    if cfg.source_kind == "none":
-        return None
     raise ValueError(f"unknown source kind {cfg.source_kind!r}")
 
 
-def build_calibration_provider(cfg: PumpConfig, source: Optional[FrameSource]) -> Optional[CalibrationProvider]:
+def build_calibration_provider(cfg: PumpConfig, source: FrameSource) -> Optional[CalibrationProvider]:
     cal = cfg.calibration
     if not cal.enable:
         return None
@@ -98,9 +94,6 @@ def build_calibration_provider(cfg: PumpConfig, source: Optional[FrameSource]) -
             logger.info("Calibration enabled but no json source configured; skipping")
             return None
         return json_file_provider(cal.json_path, image_width=cal.image_width, image_height=cal.image_height)
-    if source is None:
-        logger.info("Calibration provider %s needs a frame source; skipping (state-only)", cal.provider)
-        return None
 
     def from_config():
         size = source.frame_size
@@ -122,8 +115,8 @@ def build_calibration_provider(cfg: PumpConfig, source: Optional[FrameSource]) -
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="VRL2 downlink sender: stereo H.264 + calibration + robot state (USB camera, DDS camera, simulator SHM, or state only)")
-    p.add_argument("--source", required=True, choices=("usb", "dds", "shm", "none"), help="frame source")
+    p = argparse.ArgumentParser(description="VRL2 downlink sender: stereo H.264 + calibration + robot state (USB camera, DDS camera, or simulator SHM)")
+    p.add_argument("--source", required=True, choices=("usb", "dds", "shm"), help="frame source")
     p.add_argument("--config", default=None, metavar="PATH", help="config YAML (default: $VR_LINK_STREAM_CONFIG or the packaged default for --source)")
     p.add_argument("--port", type=int, default=None, help="override tcp.port")
     p.add_argument("--calibration-port", type=int, default=None, help="override calibration.port")
@@ -144,7 +137,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     config_path = resolve_config_path(args.config, args.source)
     logger.info("Loading config from %s", config_path)
     cfg = load_pump_config(config_path, args.source)
-    if args.source != "none" and not cfg.enable_stereo:
+    if not cfg.enable_stereo:
         logger.info("eyes_stereo disabled by config; nothing to stream")
         return
     if args.port is not None:
@@ -198,25 +191,16 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             calibration_server.start()
             closers.append(calibration_server.stop)
 
-        if source is None:
-            shm = None
-            if cfg.needs_shm():
-                from vr_link.sources.shm import ShmSource
-
-                shm = ShmSource(cfg.shm.shm_name)
-            logger.info("Listening on %s:%d (state only, %.0f Hz, robot_state %s). Waiting for headset...", cfg.stream.host, server.port, cfg.state_only.rate_hz, cfg.robot_state)
-            StateOnlyPump(server, assembler, signals, rate_hz=cfg.state_only.rate_hz, max_age_ms=cfg.state_only.max_age_ms, shm=shm, calibration=provider).run(stop)
-        else:
-            cfg.encoder.codec = resolve_h264_encoder(cfg.encoder.codec)
-            pump = StreamPump(
-                source, server, encoder_cfg=cfg.encoder, max_fps=args.max_fps, calibration=provider,
-                read_timeout=cfg.shm.read_timeout_sec if args.source == "shm" else 1.0, verbose=args.verbose,
-                robot_state=(lambda frame: assembler.assemble(frame.capture_ns, frame.robot_block)) if not cfg.robot_state.is_empty() else None,
-                signals=lambda frame: signals.sample(frame.robot_block),
-                stats_text=assembler.format_stats if cfg.robot_state.dds_fields() else None,
-            )
-            logger.info("Listening on %s:%d (%s source, encoder %s, robot_state %s). Waiting for headset...", cfg.stream.host, server.port, args.source, cfg.encoder.codec, cfg.robot_state)
-            pump.run(stop)
+        cfg.encoder.codec = resolve_h264_encoder(cfg.encoder.codec)
+        pump = StreamPump(
+            source, server, encoder_cfg=cfg.encoder, max_fps=args.max_fps, calibration=provider,
+            read_timeout=cfg.shm.read_timeout_sec if args.source == "shm" else 1.0, verbose=args.verbose,
+            robot_state=(lambda frame: assembler.assemble(frame.capture_ns, frame.robot_block)) if not cfg.robot_state.is_empty() else None,
+            signals=lambda frame: signals.sample(frame.robot_block),
+            stats_text=assembler.format_stats if cfg.robot_state.dds_fields() else None,
+        )
+        logger.info("Listening on %s:%d (%s source, encoder %s, robot_state %s). Waiting for headset...", cfg.stream.host, server.port, args.source, cfg.encoder.codec, cfg.robot_state)
+        pump.run(stop)
     finally:
         for close in reversed(closers):
             try:

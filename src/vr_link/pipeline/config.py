@@ -1,4 +1,4 @@
-"""Sender configuration (``stream_*.yaml`` / ``state_only.yaml``).
+"""Sender configuration (``stream_*.yaml``).
 
 The YAML keeps the layout of the legacy ``igris_c_camera`` ``stream_config*.yaml``
 and adds the robot-state sources::
@@ -13,7 +13,6 @@ and adds the robot-state sources::
     robot_state: {actual, reference, hand_actual, hand_command, base_pose,
                   tolerances_ms: {actual, reference, hand_actual, hand_command}}
     signals:     {source, recording}
-    state_only:  {rate_hz, max_age_ms}
 
 Paths inside a file resolve against the file's own directory. Two prefixes
 address well-known roots instead: ``pkg:`` is this package
@@ -46,9 +45,9 @@ LOCAL_DIR_ENV = "VR_LINK_LOCAL_DIR"
 PKG_PREFIX = "pkg:"
 LOCAL_PREFIX = "local:"
 DATA_PREFIX = "data:"  # 1.x spelling of pkg:; still accepted
-SOURCE_KINDS = ("usb", "dds", "shm", "none")
+SOURCE_KINDS = ("usb", "dds", "shm")
 CALIBRATION_PROVIDERS = ("yaml", "json", "ideal_from_source", "ideal_from_config")
-DEFAULT_CONFIG_FILES = {"usb": "stream_usb.yaml", "dds": "stream_dds.yaml", "shm": "stream_shm.yaml", "none": "state_only.yaml"}
+DEFAULT_CONFIG_FILES = {"usb": "stream_usb.yaml", "dds": "stream_dds.yaml", "shm": "stream_shm.yaml"}
 
 
 class ConfigError(ValueError):
@@ -180,7 +179,7 @@ class UsbSourceConfig:
 class DdsConfig:
     """One CycloneDDS participant for the camera topic and the robot-state topics."""
 
-    domain_id: int = 1
+    domain_id: int = 0
     namespace: str = ""
     topic_naming: str = "native"
     config_uri: str = ""
@@ -197,12 +196,6 @@ class ShmSourceConfig:
 
 
 @dataclass
-class StateOnlyConfig:
-    rate_hz: float = 50.0
-    max_age_ms: float = 100.0
-
-
-@dataclass
 class PumpConfig:
     source_kind: str
     config_path: Optional[Path]
@@ -215,7 +208,6 @@ class PumpConfig:
     robot_state: RobotStateSpec
     tolerances: MatchTolerances
     signals: SignalsSpec
-    state_only: StateOnlyConfig
     enable_stereo: bool = True
 
     def needs_dds(self) -> bool:
@@ -265,7 +257,6 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
     shm = _section(data, "shm")
     robot = _section(data, "robot_state")
     signals_raw = _section(data, "signals")
-    state_only_raw = _section(data, "state_only")
 
     resolution = eyes.get("resolution", [1280, 480])
     if not isinstance(resolution, (list, tuple)) or len(resolution) != 2:
@@ -317,7 +308,7 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
     if topic_naming not in ("native", "ros_compatible"):
         raise ConfigError(f"dds.topic_naming must be native or ros_compatible, got {topic_naming!r}")
     dds_cfg = DdsConfig(
-        domain_id=int(dds.get("domain_id", 1)),
+        domain_id=int(dds.get("domain_id", 0)),
         namespace=str(dds.get("namespace") or ""),
         topic_naming=topic_naming,
         config_uri=str(config_uri),
@@ -358,12 +349,11 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
         hand_actual_ms=float(tol_raw.get("hand_actual", 40.0)),
         hand_command_ms=float(tol_raw.get("hand_command", 40.0)),
     )
-    state_only = StateOnlyConfig(rate_hz=float(state_only_raw.get("rate_hz", 50.0)), max_age_ms=float(state_only_raw.get("max_age_ms", 100.0)))
 
     # dds.namespace may stay empty in the file (the CLI's --dds-namespace fills it); the
     # DDS channel itself refuses an empty namespace at start-up.
-    if (robot_spec.uses_shm() or signals_spec.recording == "shm") and source_kind not in ("shm", "none"):
-        raise ConfigError("robot_state/signals fields from shm need --source shm (or --source none with shm.shm_name)")
+    if (robot_spec.uses_shm() or signals_spec.recording == "shm") and source_kind != "shm":
+        raise ConfigError("robot_state/signals fields from shm need --source shm")
 
     return PumpConfig(
         source_kind=source_kind,
@@ -377,7 +367,6 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
         robot_state=robot_spec,
         tolerances=tolerances,
         signals=signals_spec,
-        state_only=state_only,
         enable_stereo=bool(eyes.get("enable_stereo", True)),
     )
 
@@ -400,7 +389,6 @@ __all__ = [
     "PumpConfig",
     "SOURCE_KINDS",
     "ShmSourceConfig",
-    "StateOnlyConfig",
     "StreamConfig",
     "UsbSourceConfig",
     "build_pump_config",

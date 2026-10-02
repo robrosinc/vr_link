@@ -6,8 +6,7 @@ records:
 
 * ``Calibration`` once per connection, before the first other record;
 * per video frame ``Signals`` -> ``RobotState`` -> ``VideoFrame``, all with
-  the same ``wall_ns``/``sim_ns`` and consecutive ``seq``;
-* in state-only mode (no camera) ``Signals`` -> ``RobotState`` at a fixed rate.
+  the same ``wall_ns``/``sim_ns`` and consecutive ``seq``.
 
 Delivery rules (unchanged from the 1.x VSTR server): records queued while no
 client is attached are dropped; video records are dropped until the first key
@@ -156,26 +155,6 @@ class EnvelopeTcpServer:
                     seq=self._next_sequence_locked(), wall_ns=wall_ns, sim_ns=sim_ns,
                 )
             )
-            drop_client = self._queued_bytes > self._max_queue_bytes
-        if drop_client:
-            logger.warning("Client fell behind (>%d queued bytes); disconnecting it.", self._max_queue_bytes)
-            self._detach_client()
-
-    def send_state(
-        self,
-        *,
-        wall_ns: int,
-        sim_ns: int = 0,
-        robot_state: Optional[RobotStateSample] = None,
-        signals: Optional[SignalsSample] = None,
-    ) -> None:
-        """Queue Signals/RobotState without video (state-only mode). Not keyframe-gated."""
-
-        with self._lock:
-            if self._queue is None:
-                return
-            self._enqueue_calibration_locked()
-            self._enqueue_state_locked(wall_ns, sim_ns, robot_state, signals)
             drop_client = self._queued_bytes > self._max_queue_bytes
         if drop_client:
             logger.warning("Client fell behind (>%d queued bytes); disconnecting it.", self._max_queue_bytes)

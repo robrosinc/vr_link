@@ -111,7 +111,6 @@ dds-tcp-stream = "vr-link-stream --source dds"
 # source, but the ideal rig calibration and the MuJoCo HUD label come from the file.
 dds-tcp-stream-mujoco = "vr-link-stream --source dds --config src/vr_link/configs/stream_dds_mujoco.yaml"
 shm-tcp-stream = "vr-link-stream --source shm"
-state-only-stream = "vr-link-stream --source none"
 make-mujoco-calibration = "vr-link-make-calibration"
 
 [tool.pixi.feature.calibration.tasks]

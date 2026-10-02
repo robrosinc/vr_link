@@ -97,7 +97,7 @@ _EXPECTED_LEN = {"actual": BODY_JOINT_COUNT, "reference": BODY_JOINT_COUNT, "han
 
 
 class RobotStateAssembler:
-    """Builds the RobotStateSample for one frame (or the latest state in state-only mode)."""
+    """Builds the RobotStateSample matched to one frame."""
 
     def __init__(self, spec: RobotStateSpec, tolerances: Optional[MatchTolerances] = None, dds: Optional[DdsStateBuffers] = None) -> None:
         self.spec = spec.validate()
@@ -113,11 +113,6 @@ class RobotStateAssembler:
     def _from_dds_nearest(self, name: str, target_ns: int) -> Optional[StampedVector]:
         assert self.dds is not None
         item = self.dds.get(name).nearest(target_ns, self.tolerances.ns(name))
-        return None if item is None else self._checked(name, item.value, item.stamp_ns)
-
-    def _from_dds_latest(self, name: str, now_ns: int, max_age_ns: int) -> Optional[StampedVector]:
-        assert self.dds is not None
-        item = self.dds.get(name).latest_within(now_ns, max_age_ns)
         return None if item is None else self._checked(name, item.value, item.stamp_ns)
 
     def _checked(self, name: str, values, stamp_ns: int) -> Optional[StampedVector]:
@@ -161,11 +156,6 @@ class RobotStateAssembler:
         """State matched to a frame captured at ``target_ns`` (CLOCK_REALTIME)."""
 
         return self._build(lambda name: self._from_dds_nearest(name, int(target_ns)), shm_block)
-
-    def assemble_latest(self, now_ns: int, max_age_ns: int, shm_block: Optional[ShmRobotBlock] = None) -> RobotStateSample:
-        """Newest state not older than ``max_age_ns`` (state-only mode)."""
-
-        return self._build(lambda name: self._from_dds_latest(name, int(now_ns), int(max_age_ns)), shm_block)
 
     def stats(self) -> Dict[str, MatchStats]:
         if self.dds is None:

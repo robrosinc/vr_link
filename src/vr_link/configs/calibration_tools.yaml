@@ -49,7 +49,7 @@ calibration:
 
 # vr-link-capture-checkerboard --source dds only (igris_c_sdk required).
 dds:
-  domain_id: 1
+  domain_id: 0              # robot.yaml igris_c.network.cyclonedds.domain_id (or --domain-id)
   namespace: ""             # REQUIRED for dds: the robot's namespace (e.g. igris_c_XXXX)
   topic_naming: native      # native | ros_compatible (must match the robot bridge)
   camera_topic: "sensor/eyes_stereo/compressed"   # bare name; igris_c_camera publishes CompressedImage_ on <base>/compressed

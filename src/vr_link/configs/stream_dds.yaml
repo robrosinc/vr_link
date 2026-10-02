@@ -26,7 +26,7 @@ calibration:
   yaml: "local:calibration/igris_c_eyes_stereo_unreal.yaml"   # vr-link-calibrate-cams ... --serve-as igris_c_eyes_stereo_unreal.yaml
 
 dds:
-  domain_id: 1              # robot.yaml igris_c.network.cyclonedds.domain_id (or --dds-domain)
+  domain_id: 0              # robot.yaml igris_c.network.cyclonedds.domain_id (or --dds-domain)
   namespace: ""             # REQUIRED: the robot's namespace, igris_c_<suffix> (or --dds-namespace)
   topic_naming: native      # robot.yaml igris_c.network.dds_topic_naming
   config_uri: ""            # CycloneDDS XML path/URI; empty honours $CYCLONEDDS_URI / defaults

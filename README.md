@@ -21,7 +21,7 @@ unchanged (byte-compatible with 1.x receivers such as `igris_c_gmr`).
 
 | Port | Direction | Format | Code |
 |------|-----------|--------|------|
-| 9100 | PC -> headset | `VRL2` framed `Envelope` stream: `Calibration` once per connection, then per frame `Signals` -> `RobotState` -> `VideoFrame` (state-only mode: `Signals` -> `RobotState` at a fixed rate) | `vr_link.network.tcp_server` |
+| 9100 | PC -> headset | `VRL2` framed `Envelope` stream: `Calibration` once per connection, then per frame `Signals` -> `RobotState` -> `VideoFrame` | `vr_link.network.tcp_server` |
 | 9101 | headset -> PC request, PC -> headset reply | one framed `Envelope(CalibrationRequest)` in, one framed `Envelope(Calibration)` out, then close | `vr_link.network.calibration_server` |
 | 9102 | headset -> PC | `VRS1` framed `VRState` (**unchanged since 1.x**) | `vr_link.network.tcp_device` |
 
@@ -195,8 +195,8 @@ Layout:
   `robot_state` (`RobotStateSample`, joint-order constants), `signals`.
 - `vr_link.network.tcp_server` — `EnvelopeTcpServer`: one headset at a time,
   per-connection writer queue, `Calibration` once, `send_video(...,
-  robot_state=, signals=)` and `send_state(...)`; drops delta frames until a
-  fresh connection's first IDR and disconnects a receiver that falls behind.
+  robot_state=, signals=)`; drops delta frames until a fresh connection's
+  first IDR and disconnects a receiver that falls behind.
 - `vr_link.network.calibration_server` — `CalibrationServer(provider,
   port=9101)` answering `CalibrationRequest` from a provider callable
   evaluated per request (`yaml_file_provider`, `json_file_provider`,
@@ -211,20 +211,19 @@ Layout:
   IDR, `request_keyframe()`), `EncoderWorker`, `resolve_h264_encoder(name)`.
 - `vr_link.sources` — `Frame` (with `robot_block` from SHM v3),
   `StereoCameraMetadata`, `ShmRobotBlock`, the `FrameSource` protocol, and
-  `usb.UsbStereoSource`, `shm.ShmSource` (v1..v3, `read_state()` for
-  state-only mode), `dds_camera.DdsCameraSource` (JPEG topic on a
-  `DdsChannel`).
+  `usb.UsbStereoSource`, `shm.ShmSource` (v1..v3), `dds_camera.DdsCameraSource`
+  (JPEG topic on a `DdsChannel`).
 - `vr_link.pipeline` — `config` (YAML schema below), `pump.StreamPump`
   (source -> encoder -> server, with per-frame `RobotState`/`Signals`
   providers), `robot_state.RobotStateAssembler` (per-field `dds`/`shm`/`none`
-  with tolerances 5/15/40/40 ms) and `SignalsProvider`, `state_only.StateOnlyPump`.
+  with tolerances 5/15/40/40 ms) and `SignalsProvider`.
 - `vr_link.calibration` — `schema` (mapping validation, JSON file form,
   `TAN_SERIES_K`), `ideal` (ideal stereo model from a rig description or live
   camera intrinsics/poses, MuJoCo metadata adapter), `fov`, `yaml_io`.
 - `vr_link.cli`, `vr_link.tools` — entry points (below) and the checkerboard
   capture / stereo calibration tools.
 - `vr_link.configs` — the packaged configuration files (`stream_*.yaml`,
-  `state_only.yaml`, `calibration_tools.yaml`; tracked, shipped in the wheel).
+  `calibration_tools.yaml`; tracked, shipped in the wheel).
 - `local/` (repository root, **git-ignored**) — machine-local data, never
   packaged: `captures/<yymmdd_HHMMSS>/` from `vr-link-capture-checkerboard`,
   `calibration/<capture>/` from `vr-link-calibrate-cams`, and the served
@@ -251,7 +250,6 @@ vr-link-stream --source usb   [--config stream_usb.yaml]  --dds-namespace igris_
 vr-link-stream --source dds   [--config stream_dds.yaml]  --dds-namespace igris_c_XXXX   igris_c_camera DDS topic + robot DDS state
 vr-link-stream --source dds   --config stream_dds_mujoco.yaml --dds-namespace igris_c_XXXX  MuJoCo publishing the same DDS contract (ideal calibration from the file)
 vr-link-stream --source shm   [--config stream_shm.yaml]                                simulator segment (video + state)
-vr-link-stream --source none  [--config state_only.yaml]  --dds-namespace igris_c_XXXX   no camera: RobotState/Signals only
 ```
 
 Config schema (`src/vr_link/configs/*.yaml`; `--config` >
@@ -271,7 +269,6 @@ robot_state: {actual: dds|shm|none, reference: dds|none, hand_actual: dds|shm|no
               hand_command: dds|none, base_pose: shm|none,
               tolerances_ms: {actual: 5, reference: 15, hand_actual: 40, hand_command: 40}}
 signals:     {source: robot|mujoco|isaac|unknown, recording: shm|none}
-state_only:  {rate_hz: 50, max_age_ms: 100}
 ```
 
 Calibration providers: `yaml`/`json` serve a measured file (the real robot);
@@ -289,7 +286,6 @@ pixi run shm-tcp-stream             # vr-link-stream --source shm
 pixi run camera-tcp-stream -- --dds-namespace igris_c_XXXX
 pixi run dds-tcp-stream -- --dds-namespace igris_c_XXXX [--dds-domain N]   # igris_c_camera on <ns>/sensor/eyes_stereo/compressed
 pixi run dds-tcp-stream-mujoco -- --dds-namespace igris_c_XXXX [--dds-domain N]   # igris_c_mujoco vision_dds_sink on the same topic
-pixi run state-only-stream -- --dds-namespace igris_c_XXXX
 pixi run capture-checkerboard          # -> local/captures/<ts>/
 pixi run capture-checkerboard-headless # same output, no window: robot NUC over SSH (stop igris-c-camera.service first), then scp the folder
 pixi run focus-check                   # live per-eye sharpness (Laplacian variance) in the terminal: turn a lens ring until L and R agree

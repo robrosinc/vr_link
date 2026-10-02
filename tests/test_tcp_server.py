@@ -1,4 +1,4 @@
-"""EnvelopeTcpServer: record order, calibration-once, keyframe gate, state-only sends."""
+"""EnvelopeTcpServer: record order, calibration-once, keyframe gate."""
 import queue
 
 import numpy as np
@@ -68,19 +68,9 @@ def test_calibration_once_then_signals_robot_state_video_share_stamps():
     assert {(e.wall_ns, e.sim_ns) for e in envs[4:]} == {(2_000_000_004, 43)}
 
 
-def test_send_state_is_not_keyframe_gated_and_sends_calibration_once():
-    server = _attached_server()
-    server.set_calibration(CAL)
-    server.send_state(wall_ns=5, sim_ns=0, signals=SignalsSample())
-    server.send_state(wall_ns=6, sim_ns=0, robot_state=RobotStateSample(hand_actual=vector(np.ones(12))))
-    kinds = [e.kind for e in _drain(server)]
-    assert kinds == [MessageKind.CALIBRATION, MessageKind.SIGNALS, MessageKind.ROBOT_STATE]
-
-
 def test_nothing_is_queued_without_a_client():
     server = EnvelopeTcpServer(send_calibration=False)
-    server.send_video(b"key", is_key=True, width=64, height=48, wall_ns=1, sim_ns=0)
-    server.send_state(wall_ns=1, signals=SignalsSample())
+    server.send_video(b"key", is_key=True, width=64, height=48, wall_ns=1, sim_ns=0, signals=SignalsSample())
     assert server._queue is None and not server.client_connected
 
 

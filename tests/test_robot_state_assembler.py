@@ -71,14 +71,6 @@ def test_mixed_shm_and_dds_sources():
     assert sample.base_pose is None  # base_pose bit clear in this block
 
 
-def test_assemble_latest_uses_age_not_nearest():
-    buffers = DdsStateBuffers()
-    buffers.actual.push(T - 500 * MS, np.zeros(31, np.float32))
-    assembler = RobotStateAssembler(RobotStateSpec(actual="dds"), dds=buffers)
-    assert assembler.assemble_latest(T, 100 * MS).body_actual is None
-    assert assembler.assemble_latest(T, 600 * MS).body_actual is not None
-
-
 def test_signals_provider():
     provider = SignalsProvider(SignalsSpec(source=SourceKind.MUJOCO, recording="shm"))
     assert provider.sample(_block(STATE_VALID_RECORDING, STATE_FLAG_RECORDING)).recording is True

@@ -32,7 +32,7 @@ calibration:
 
 # Robot state matched to each frame by timestamp (igris_c_sdk wheel required).
 dds:
-  domain_id: 1
+  domain_id: 0              # robot.yaml igris_c.network.cyclonedds.domain_id (or --dds-domain)
   namespace: ""             # REQUIRED: the robot's namespace (or --dds-namespace)
   topic_naming: native      # native | ros_compatible (must match the robot bridge)
   config_uri: ""            # CycloneDDS XML path/URI; empty honours $CYCLONEDDS_URI

@@ -18,14 +18,12 @@ def test_packaged_defaults_load(kind):
         assert cfg.robot_state.actual == "shm" and cfg.robot_state.base_pose == "shm" and cfg.signals.recording == "shm"
         assert cfg.signals.source is SourceKind.MUJOCO and cfg.needs_shm()
         assert cfg.robot_state.dds_fields() == {"reference", "hand_command"} and cfg.needs_dds()
-    elif kind == "none":
-        assert not cfg.calibration.enable and cfg.state_only.rate_hz == 50.0
-        assert cfg.robot_state.dds_fields() == {"actual", "reference", "hand_actual", "hand_command"}
     else:
         assert cfg.calibration.provider == "yaml" and cfg.encoder.codec == "libx264"
         assert cfg.calibration.yaml_path == config.local_path("calibration/igris_c_eyes_stereo_unreal.yaml")
         assert cfg.signals.source is SourceKind.ROBOT and cfg.needs_dds()
         assert cfg.tolerances.actual_ms == 5.0 and cfg.tolerances.reference_ms == 15.0
+    assert cfg.dds.domain_id == 0
 
 
 def test_dds_fields_and_topics(tmp_path):
@@ -91,9 +89,9 @@ def test_shm_fields_need_a_shm_capable_source(tmp_path):
     path.write_text("robot_state: {actual: shm}\n", encoding="utf-8")
     with pytest.raises(config.ConfigError):
         config.load_pump_config(path, "usb")
-    assert config.load_pump_config(path, "none").needs_shm()
+    assert config.load_pump_config(path, "shm").needs_shm()
     with pytest.raises(config.ConfigError):
-        config.default_config_path("isaac")
+        config.default_config_path("none")  # the 2.0 state-only mode is gone
 
 
 def test_config_path_precedence(monkeypatch, tmp_path):
