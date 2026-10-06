@@ -1,0 +1,59 @@
+# VRL2 downlink fed by the Isaac Sim teleop bridge (hit-tasks igris_c_sdk_bridge) over DDS:
+# the bridge publishes the igris_c_camera contract (CompressedImage_ on
+# <ns>/sensor/eyes_stereo/compressed) and lowstate, so the receive path is identical to the
+# real robot.
+#   vr-link-stream --source dds --config this-file --dds-namespace igris_c_XXXX [--dds-domain N]
+#   pixi run dds-tcp-stream-isaac -- --dds-namespace igris_c_XXXX
+# Differs from stream_dds_mujoco.yaml in the camera model only: Isaac renders the eye cameras
+# with the OpenCV fisheye (equidistant) model (hit_embodiments igris_c/sensors.py,
+# projection "fisheye"), so the served calibration carries the equidistant focal with k = 0
+# instead of a pinhole focal with the tan-series k. The HUD label is Isaac.
+
+eyes_stereo:
+  resolution: [1280, 480]   # 640x480 per eye, side by side; frames are resized to this if they differ
+  fps: 30
+  enable_stereo: true
+
+tcp:
+  host: "0.0.0.0"
+  port: 9100
+  bitrate: 8000000
+  gop: 30
+  encoder: "sw"
+
+calibration:
+  enable: true
+  host: "0.0.0.0"
+  port: 9101
+  provider: ideal_from_config   # the DDS camera source has no camera metadata
+  ideal:
+    model: fisheye_equidistant
+    # LSM22100 eye module: EFL 1.30 mm / 3.0 um pixel = 433.3 px/rad at 1280x720 per eye,
+    # scaled by 480/720 for the 640x480 render. Must equal hit_embodiments LEFT/RIGHT_RGB_CAMERA fx.
+    focal_px: 288.89
+    cx: 320.0                 # principal point authored on the Isaac camera (w/2, h/2)
+    cy: 240.0
+    toe_out_deg: 14.0         # hit_embodiments eye mounts: yaw +-14 deg about Link_Neck_Pitch Z
+    baseline_mm: 52.152       # 2 * 0.026076 m
+
+dds:
+  domain_id: 0              # robot.yaml igris_c.network.cyclonedds.domain_id of the sim stack (or --dds-domain)
+  namespace: ""             # REQUIRED: the sim stack's namespace, igris_c_<suffix> (or --dds-namespace)
+  topic_naming: native      # robot.yaml igris_c.network.dds_topic_naming
+  config_uri: ""            # CycloneDDS XML path/URI; empty honours $CYCLONEDDS_URI / defaults
+  camera_topic: "sensor/eyes_stereo/compressed"   # bare name; the channel prefixes the namespace
+  frame_id: ""
+  topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate}
+  buffer_capacity: 512
+
+robot_state:
+  actual: dds               # bridge lowstate
+  reference: dds            # gmr/refstate from igris_c_gmr; invalid when it is not running
+  hand_actual: dds
+  hand_command: dds         # handcmd from igris_c_gmr; invalid when it is not running
+  base_pose: none           # SHM lane only
+  tolerances_ms: {actual: 5, reference: 15, hand_actual: 40, hand_command: 40}
+
+signals:
+  source: isaac
+  recording: none           # SHM lane only

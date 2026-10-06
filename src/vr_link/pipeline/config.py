@@ -6,7 +6,9 @@ and adds the robot-state sources::
     eyes_stereo: {cam_index, resolution: [w, h], fps, enable_stereo, apply_tuning}
     tcp:         {host, port, bitrate, gop, fourcc, encoder}
     calibration: {enable, host, port, provider, yaml, json, image_width, image_height,
-                  request_timeout, ideal: {fovy_deg, toe_out_deg, baseline_mm}}
+                  request_timeout,
+                  ideal: {model: pinhole|fisheye_equidistant, fovy_deg, focal_px, cx, cy,
+                          toe_out_deg, baseline_mm}}
     dds:         {domain_id, namespace, topic_naming, config_uri, camera_topic, frame_id,
                   topics: {lowstate, handstate, handcmd, refstate}, buffer_capacity}
     shm:         {shm_name, read_timeout_sec}
@@ -47,6 +49,10 @@ LOCAL_PREFIX = "local:"
 DATA_PREFIX = "data:"  # 1.x spelling of pkg:; still accepted
 SOURCE_KINDS = ("usb", "dds", "shm")
 CALIBRATION_PROVIDERS = ("yaml", "json", "ideal_from_source", "ideal_from_config")
+# "pinhole": the simulator renders a pinhole; serve fx from fovy with the tan-series k.
+# "fisheye_equidistant": the simulator renders the OpenCV fisheye model itself (Isaac Sim);
+# serve focal_px with k = 0.
+IDEAL_MODELS = ("pinhole", "fisheye_equidistant")
 DEFAULT_CONFIG_FILES = {"usb": "stream_usb.yaml", "dds": "stream_dds.yaml", "shm": "stream_shm.yaml"}
 
 
@@ -149,9 +155,14 @@ class EncoderConfig:
 
 @dataclass
 class IdealRigConfig:
+    model: str = "pinhole"
     fovy_deg: float = 90.0
     toe_out_deg: float = 14.0
     baseline_mm: float = 52.152
+    # fisheye_equidistant only: px/rad focal and the authored principal point (None = w/2, h/2).
+    focal_px: Optional[float] = None
+    cx: Optional[float] = None
+    cy: Optional[float] = None
 
 
 @dataclass
@@ -277,6 +288,12 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
     if provider not in CALIBRATION_PROVIDERS:
         raise ConfigError(f"calibration.provider must be one of {CALIBRATION_PROVIDERS}, got {provider!r}")
     ideal_raw = dict(cal.get("ideal") or {})
+    ideal_model = str(ideal_raw.get("model", "pinhole"))
+    if ideal_model not in IDEAL_MODELS:
+        raise ConfigError(f"calibration.ideal.model must be one of {IDEAL_MODELS}, got {ideal_model!r}")
+    focal_px = ideal_raw.get("focal_px")
+    if ideal_model == "fisheye_equidistant" and focal_px is None:
+        raise ConfigError("calibration.ideal.model fisheye_equidistant requires focal_px")
     calibration = CalibrationServerConfig(
         enable=bool(cal.get("enable", True)),
         host=str(cal.get("host", "0.0.0.0")),
@@ -288,9 +305,13 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
         image_height=int(cal.get("image_height", 0)),
         request_timeout=float(cal.get("request_timeout", 2.0)),
         ideal=IdealRigConfig(
+            model=ideal_model,
             fovy_deg=float(ideal_raw.get("fovy_deg", 90.0)),
             toe_out_deg=float(ideal_raw.get("toe_out_deg", 14.0)),
             baseline_mm=float(ideal_raw.get("baseline_mm", 52.152)),
+            focal_px=None if focal_px is None else float(focal_px),
+            cx=None if ideal_raw.get("cx") is None else float(ideal_raw["cx"]),
+            cy=None if ideal_raw.get("cy") is None else float(ideal_raw["cy"]),
         ),
     )
 

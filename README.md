@@ -118,7 +118,9 @@ comes back to the headset in `Signals.recording`.
 (eye optical frame -> mid frame, row-major). The receiver's screen shader
 always applies the fisheye model, so a simulated pinhole camera is sent as
 the Taylor series of tan(theta) (`k = 1/3, 2/15, 17/315, 62/2835`), never as
-zeros. Measured hardware calibrations come from `vr-link-calibrate-cams`;
+zeros. A simulator that renders the OpenCV fisheye model itself (Isaac Sim,
+`stream_dds_isaac.yaml`) is sent its equidistant focal in px/rad with `k = 0`.
+Measured hardware calibrations come from `vr-link-calibrate-cams`;
 simulators compute theirs at request time (`vr_link.calibration.ideal`). The
 flat YAML file (`left_fx: ...`) and the JSON file (`vr_link.calibration.schema`)
 are on-disk forms of the same mapping.
@@ -261,7 +263,8 @@ the file's directory; `pkg:` addresses the package (`pkg:configs/...`) and
 eyes_stereo: {cam_index, resolution: [1280, 480], fps, enable_stereo, apply_tuning}
 tcp:         {host, port: 9100, bitrate, gop, fourcc, encoder: sw|libx264|h264_nvenc|h264_vaapi|h264_qsv}
 calibration: {enable, host, port: 9101, provider: yaml|json|ideal_from_source|ideal_from_config,
-              yaml, json, image_width, image_height, request_timeout, ideal: {fovy_deg, toe_out_deg, baseline_mm}}
+              yaml, json, image_width, image_height, request_timeout,
+              ideal: {model: pinhole|fisheye_equidistant, fovy_deg, focal_px, cx, cy, toe_out_deg, baseline_mm}}
 dds:         {domain_id, namespace, topic_naming: native|ros_compatible, config_uri,
               camera_topic, frame_id, topics: {lowstate, handstate, handcmd, refstate}, buffer_capacity}
 shm:         {shm_name, read_timeout_sec}
@@ -274,7 +277,10 @@ signals:     {source: robot|mujoco|isaac|unknown, recording: shm|none}
 Calibration providers: `yaml`/`json` serve a measured file (the real robot);
 `ideal_from_source` computes the ideal model from the segment's camera
 metadata (layout >= 2), falling back to `ideal_from_config`
-(`calibration.ideal` + the source frame size).
+(`calibration.ideal` + the source frame size). `ideal.model` names the
+projection the simulator renders: `pinhole` (default; `fovy_deg` -> fx with
+the tan-series k, MuJoCo) or `fisheye_equidistant` (`focal_px` in px/rad,
+optional `cx`/`cy`, k = 0; Isaac Sim via `stream_dds_isaac.yaml`).
 
 ### Standalone use (pixi)
 

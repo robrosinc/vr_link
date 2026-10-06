@@ -16,6 +16,12 @@ Both emit the tan-series fisheye coefficients (:data:`TAN_SERIES_K`) so the
 receiver's fisheye shader reproduces a pinhole projection, and the OpenCV
 ``stereoRectify``-style R1/R2 that rotate each eye's optical frame into the
 common mid frame (the slerp midpoint of the two eye orientations).
+
+* :func:`ideal_stereo_fisheye_from_focal` - for a simulator that renders the
+  OpenCV fisheye (equidistant) model itself, e.g. Isaac Sim with
+  ``OmniLensDistortionOpenCvFisheyeAPI``. ``fx``/``fy`` are then px/rad and
+  ``k1..k4`` are zero: the receiver's shader applies exactly the model the
+  frame was rendered with, so no tan-series translation is involved.
 """
 
 from __future__ import annotations
@@ -132,20 +138,22 @@ def intrinsics_from_fovy(width: int, height: int, fovy_deg: float, *, principal:
     return np.array([[focal, 0.0, cx], [0.0, focal, cy], [0.0, 0.0, 1.0]], dtype=np.float64)
 
 
-def _camera_entry(k: np.ndarray, rotation: np.ndarray) -> Dict[str, object]:
+def _camera_entry(k: np.ndarray, rotation: np.ndarray, distortion: Sequence[float] = TAN_SERIES_K) -> Dict[str, object]:
     k = np.asarray(k, dtype=np.float64)
     if k.shape != (3, 3):
         raise ValueError(f"intrinsic matrix must be 3x3, got {k.shape}")
     rotation = np.asarray(rotation, dtype=np.float64)
     if rotation.shape != (3, 3):
         raise ValueError(f"rotation must be 3x3, got {rotation.shape}")
+    if len(distortion) != 4:
+        raise ValueError(f"fisheye distortion needs 4 coefficients, got {len(distortion)}")
     entry: Dict[str, object] = {
         "fx": float(k[0, 0]),
         "fy": float(k[1, 1]),
         "cx": float(k[0, 2]),
         "cy": float(k[1, 2]),
     }
-    entry.update({f"k{i + 1}": float(v) for i, v in enumerate(TAN_SERIES_K)})
+    entry.update({f"k{i + 1}": float(v) for i, v in enumerate(distortion)})
     entry["r"] = [float(v) for v in rotation.reshape(-1)]
     return entry
 
@@ -201,6 +209,45 @@ def ideal_stereo_from_fovy(
     return cal
 
 
+def ideal_stereo_fisheye_from_focal(
+    width: int,
+    height: int,
+    focal_px: float,
+    toe_out_deg: float,
+    baseline_mm: float,
+    *,
+    cx: float | None = None,
+    cy: float | None = None,
+) -> Dict[str, object]:
+    """Calibration dict for eye cameras rendered with the OpenCV fisheye (equidistant) model.
+
+    ``focal_px`` is the equidistant focal (image radius per radian of ray angle,
+    ``r = focal_px * theta``); ``k1..k4`` are zero because the frame already is
+    that projection. The principal point defaults to ``(w/2, h/2)``, the value
+    authored on the rendering camera. Toe-out handling matches
+    :func:`ideal_stereo_from_fovy`.
+    """
+
+    if width <= 0 or height <= 0:
+        raise ValueError(f"image size must be positive, got {width}x{height}")
+    if not focal_px > 0.0 or not math.isfinite(focal_px):
+        raise ValueError(f"focal_px must be positive and finite, got {focal_px}")
+    cx = width / 2.0 if cx is None else float(cx)
+    cy = height / 2.0 if cy is None else float(cy)
+    k = np.array([[focal_px, 0.0, cx], [0.0, focal_px, cy], [0.0, 0.0, 1.0]], dtype=np.float64)
+    zero = (0.0, 0.0, 0.0, 0.0)
+    return {
+        "image_width": int(width),
+        "image_height": int(height),
+        "camera_model": "fisheye_equidistant",
+        "focal_px": float(focal_px),
+        "toe_out_deg": float(toe_out_deg),
+        "baseline_mm": float(baseline_mm),
+        "left": _camera_entry(k, rotation_y(-toe_out_deg), zero),
+        "right": _camera_entry(k, rotation_y(+toe_out_deg), zero),
+    }
+
+
 def ideal_stereo_from_metadata(meta) -> Dict[str, object]:
     """Calibration dict from :class:`vr_link.sources.StereoCameraMetadata` (MuJoCo axes)."""
 
@@ -231,6 +278,7 @@ def flatten_sides(cal: Dict[str, object]) -> Dict[str, float]:
 __all__ = [
     "MUJOCO_CAM_TO_OPENCV",
     "flatten_sides",
+    "ideal_stereo_fisheye_from_focal",
     "ideal_stereo_from_fovy",
     "ideal_stereo_from_intrinsics",
     "ideal_stereo_from_metadata",

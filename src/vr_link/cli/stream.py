@@ -13,6 +13,8 @@ Calibration providers (``calibration.provider``): ``yaml`` / ``json`` serve a
 file (measured hardware calibration); ``ideal_from_source`` computes the ideal
 model from the camera metadata a simulator publishes (SHM layout >= 2), falling
 back to ``ideal_from_config`` (``calibration.ideal`` + the source frame size).
+``calibration.ideal.model`` selects the rendered projection: ``pinhole`` (fovy ->
+fx, tan-series k; MuJoCo) or ``fisheye_equidistant`` (focal_px, k = 0; Isaac Sim).
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ import signal
 import threading
 from typing import List, Optional, Sequence
 
-from vr_link.calibration.ideal import ideal_stereo_from_fovy, ideal_stereo_from_metadata
+from vr_link.calibration.ideal import ideal_stereo_fisheye_from_focal, ideal_stereo_from_fovy, ideal_stereo_from_metadata
 from vr_link.calibration.schema import CalibrationError
 from vr_link.network.calibration_server import CalibrationProvider, CalibrationServer, json_file_provider, yaml_file_provider
 from vr_link.network.tcp_server import EnvelopeTcpServer
@@ -100,7 +102,12 @@ def build_calibration_provider(cfg: PumpConfig, source: FrameSource) -> Optional
         if size is None:
             raise CalibrationError("source frame size unknown yet")
         width, height = size
-        return ideal_stereo_from_fovy(width // 2, height, cal.ideal.fovy_deg, cal.ideal.toe_out_deg, cal.ideal.baseline_mm)
+        rig = cal.ideal
+        if rig.model == "fisheye_equidistant":
+            return ideal_stereo_fisheye_from_focal(
+                width // 2, height, rig.focal_px, rig.toe_out_deg, rig.baseline_mm, cx=rig.cx, cy=rig.cy
+            )
+        return ideal_stereo_from_fovy(width // 2, height, rig.fovy_deg, rig.toe_out_deg, rig.baseline_mm)
 
     if cal.provider == "ideal_from_config":
         return from_config

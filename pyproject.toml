@@ -110,6 +110,9 @@ dds-tcp-stream = "vr-link-stream --source dds"
 # MuJoCo publishing the igris_c_camera DDS contract (igris_c_mujoco vision_dds_sink): same
 # source, but the ideal rig calibration and the MuJoCo HUD label come from the file.
 dds-tcp-stream-mujoco = "vr-link-stream --source dds --config src/vr_link/configs/stream_dds_mujoco.yaml"
+# Isaac Sim teleop bridge (hit-tasks): same DDS contract, but the eye cameras are rendered
+# with the OpenCV fisheye model, so the ideal calibration is served with k = 0.
+dds-tcp-stream-isaac = "vr-link-stream --source dds --config src/vr_link/configs/stream_dds_isaac.yaml"
 shm-tcp-stream = "vr-link-stream --source shm"
 make-mujoco-calibration = "vr-link-make-calibration"
 
