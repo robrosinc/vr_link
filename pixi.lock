@@ -3067,7 +3067,7 @@ packages:
 - pypi: ./
   name: vr-link
   version: 2.0.0
-  sha256: 1306b2620afb7eee8fb15c96557b7474c591a3c3d8e23361ad4d2fbc2baeed10
+  sha256: ec004279cd826dbe4ad8eea9a772a5b0f3440a14bdbf379652964c0f025a3881
   requires_dist:
   - flatbuffers>=24,<26
   - numpy>=1.24

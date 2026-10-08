@@ -134,6 +134,9 @@ test = { cmd = "python -m pytest tests -q", env = { PYTEST_DISABLE_PLUGIN_AUTOLO
 generate = "scripts/generate.sh"
 # igris_c_sdk Python binding: a human builds the wheel (`task wheel` in
 # thirdparty/igris_c_sdk at the pinned commit); this installs it into the env.
+# Fresh clone, all three steps (submodules, task wheel, install-sdk) in one go:
+# `scripts/setup_sdk.sh` from a plain shell with ROS 2 sourced. It is not a pixi
+# task on purpose: `task wheel` must configure CMake outside this env.
 install-sdk = "bash scripts/install_sdk_wheel.sh"
 check-sdk = "python -c \"import igris_c_sdk; print('igris_c_sdk', getattr(igris_c_sdk, '__version__', '?'), igris_c_sdk.__file__); assert hasattr(igris_c_sdk, 'ChannelFactory')\""
 

@@ -317,6 +317,7 @@ optional `cx`/`cy`, k = 0; Isaac Sim via `stream_dds_isaac.yaml`).
 ```bash
 pixi install                        # default env: video + calibration + test
 pixi run test                       # pytest (loopback and temp-file tests, no hardware)
+scripts/setup_sdk.sh                # fresh clone: submodules + `task wheel` + install-sdk (plain shell, ROS 2 sourced)
 pixi run install-sdk                # igris_c_sdk wheel from thirdparty/igris_c_sdk/dist (human-built)
 pixi run shm-tcp-stream             # vr-link-stream --source shm
 pixi run camera-tcp-stream -- --dds-namespace igris_c_XXXX
