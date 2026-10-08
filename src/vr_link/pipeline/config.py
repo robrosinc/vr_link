@@ -10,11 +10,11 @@ and adds the robot-state sources::
                   ideal: {model: pinhole|fisheye_equidistant, fovy_deg, focal_px, cx, cy,
                           toe_out_deg, baseline_mm}}
     dds:         {domain_id, namespace, topic_naming, config_uri, camera_topic, frame_id,
-                  topics: {lowstate, handstate, handcmd, refstate}, buffer_capacity}
+                  topics: {lowstate, handstate, handcmd, refstate, recording_state}, buffer_capacity}
     shm:         {shm_name, read_timeout_sec}
     robot_state: {actual, reference, hand_actual, hand_command, base_pose,
                   tolerances_ms: {actual, reference, hand_actual, hand_command}}
-    signals:     {source, recording}
+    signals:     {source, recording: shm|dds|none}
 
 Paths inside a file resolve against the file's own directory. Two prefixes
 address well-known roots instead: ``pkg:`` is this package
@@ -222,7 +222,7 @@ class PumpConfig:
     enable_stereo: bool = True
 
     def needs_dds(self) -> bool:
-        return self.source_kind == "dds" or bool(self.robot_state.dds_fields())
+        return self.source_kind == "dds" or bool(self.robot_state.dds_fields()) or self.signals.recording == "dds"
 
     def needs_shm(self) -> bool:
         return self.source_kind == "shm" or self.robot_state.uses_shm() or self.signals.recording == "shm"
@@ -340,6 +340,7 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
             handstate=str(topics_raw.get("handstate", "handstate")),
             handcmd=str(topics_raw.get("handcmd", "handcmd")),
             refstate=str(topics_raw.get("refstate", "gmr/refstate")),
+            recording_state=str(topics_raw.get("recording_state", DdsStateTopics.recording_state)),
         ),
         buffer_capacity=int(dds.get("buffer_capacity", 512)),
     )

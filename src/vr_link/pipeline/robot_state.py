@@ -169,27 +169,44 @@ class RobotStateAssembler:
         return ", ".join(parts) if parts else "no dds fields"
 
 
+RECORDING_SOURCES = ("shm", "dds", "none")
+DDS_RECORDING_MAX_AGE_S = 1.0
+
+
 @dataclass
 class SignalsSpec:
     source: SourceKind = SourceKind.UNKNOWN
-    recording: Literal["shm", "none"] = "none"
+    # shm: the simulator's robot block flag; dds: the recorder's recording/state topic.
+    recording: Literal["shm", "dds", "none"] = "none"
 
     def validate(self) -> "SignalsSpec":
-        if self.recording not in ("shm", "none"):
+        if self.recording not in RECORDING_SOURCES:
             raise ValueError(f"signals.recording: unknown source {self.recording!r}")
         return self
 
 
 class SignalsProvider:
-    """Signals for a frame: the configured source kind and the recording flag."""
+    """Signals for a frame: the configured source kind and the recording flag.
 
-    def __init__(self, spec: SignalsSpec) -> None:
+    With ``recording: dds`` the flag is the newest ``recording/state`` sample
+    (:class:`~vr_link.network.dds.teleop.RecordingStateSubscriber`); a sample
+    older than ``max_age_s`` reads as not recording, so a recorder that went
+    away does not leave the HUD showing a stale "recording".
+    """
+
+    def __init__(self, spec: SignalsSpec, recording_state=None, *, max_age_s: float = DDS_RECORDING_MAX_AGE_S) -> None:
         self.spec = spec.validate()
+        self.recording_state = recording_state
+        self.max_age_s = float(max_age_s)
+        if self.spec.recording == "dds" and recording_state is None:
+            raise ValueError("signals.recording is dds but no recording/state subscriber was given")
 
     def sample(self, shm_block: Optional[ShmRobotBlock] = None) -> SignalsSample:
         recording = False
         if self.spec.recording == "shm" and shm_block is not None:
             recording = bool(shm_block.recording)
+        elif self.spec.recording == "dds":
+            recording = bool(self.recording_state.recording(self.max_age_s))
         return SignalsSample(recording=recording, source=self.spec.source)
 
 

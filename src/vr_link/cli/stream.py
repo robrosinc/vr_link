@@ -39,10 +39,10 @@ logger = logging.getLogger("vr_link.stream")
 
 
 class DdsRuntime:
-    """The process-wide DDS participant plus the robot-state subscriptions (all optional)."""
+    """The process-wide DDS participant plus the robot-state and recording-state subscriptions (all optional)."""
 
     def __init__(self, cfg: PumpConfig) -> None:
-        from vr_link.network.dds import DdsChannel, start_state_subscriptions
+        from vr_link.network.dds import DdsChannel, RecordingStateSubscriber, start_state_subscriptions
         from vr_link.utils.time_sync import StampedRingBuffer
 
         self.channel = DdsChannel.create(
@@ -55,8 +55,19 @@ class DdsRuntime:
             hand_actual=StampedRingBuffer(cap, name="hand_actual"), hand_command=StampedRingBuffer(cap, name="hand_command"),
         )
         self.subscriptions = start_state_subscriptions(self.channel, cfg.dds.topics, self.buffers, needed=cfg.robot_state.dds_fields())
+        # Signals.recording from the recorder's recording/state topic (messages.teleop_dds).
+        self.recording_state = None
+        if cfg.signals.recording == "dds":
+            try:
+                self.recording_state = RecordingStateSubscriber(self.channel.sdk, cfg.dds.topics.recording_state)
+                self.recording_state.start()
+            except Exception:
+                self.close()
+                raise
 
     def close(self) -> None:
+        if self.recording_state is not None:
+            self.recording_state.stop()
         for sub in self.subscriptions:
             sub.stop()
         self.channel.release()
@@ -190,7 +201,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         if provider is not None:
             calibration_server = CalibrationServer(provider, host=cfg.calibration.host, port=cfg.calibration.port, request_timeout=cfg.calibration.request_timeout)
         assembler = RobotStateAssembler(cfg.robot_state, cfg.tolerances, dds.buffers if dds is not None else None)
-        signals = SignalsProvider(cfg.signals)
+        signals = SignalsProvider(cfg.signals, recording_state=dds.recording_state if dds is not None else None)
 
         server.start()
         closers.append(server.stop)

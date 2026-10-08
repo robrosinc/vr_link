@@ -64,7 +64,7 @@ def test_packaged_isaac_dds_config_loads():
     assert cfg.calibration.provider == "ideal_from_config"
     assert rig.model == "fisheye_equidistant" and rig.focal_px == pytest.approx(288.89)
     assert (rig.cx, rig.cy, rig.toe_out_deg, rig.baseline_mm) == (320.0, 240.0, 14.0, 52.152)
-    assert cfg.signals.source is config.SourceKind.ISAAC and cfg.signals.recording == "none"
+    assert cfg.signals.source is config.SourceKind.ISAAC and cfg.signals.recording == "dds"
     assert cfg.dds.camera_topic == "sensor/eyes_stereo/compressed" and cfg.dds.namespace == ""
     assert cfg.robot_state.dds_fields() == {"actual", "reference", "hand_actual", "hand_command"}
 

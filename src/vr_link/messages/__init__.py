@@ -37,4 +37,16 @@ from .robot_state import (  # noqa: F401
     decode_robot_state,
 )
 from .signals import SignalsSample, SourceKind, build_signals_payload, decode_signals  # noqa: F401
+from .teleop_dds import (  # noqa: F401  (DDS Joy_ layout, not an Envelope body)
+    CONTROLLER_TOPIC,
+    RECORDING_STATE_TOPIC,
+    ControllerSample,
+    RecordingStateSample,
+    RecordToggleTracker,
+    controller_sample_from_vr_state,
+    decode_controller,
+    decode_recording_state,
+    encode_controller,
+    encode_recording_state,
+)
 from .video import VideoFrameMsg, build_video_frame_payload, decode_video_frame  # noqa: F401

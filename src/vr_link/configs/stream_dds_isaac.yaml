@@ -43,7 +43,8 @@ dds:
   config_uri: ""            # CycloneDDS XML path/URI; empty honours $CYCLONEDDS_URI / defaults
   camera_topic: "sensor/eyes_stereo/compressed"   # bare name; the channel prefixes the namespace
   frame_id: ""
-  topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate}
+  topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate,
+           recording_state: recording/state}
   buffer_capacity: 512
 
 robot_state:
@@ -56,4 +57,4 @@ robot_state:
 
 signals:
   source: isaac
-  recording: none           # SHM lane only
+  recording: dds            # the bridge's recording/state topic; false when it is silent for 1 s

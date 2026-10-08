@@ -74,7 +74,7 @@ def test_relative_paths_resolve_against_the_config_file(tmp_path):
     "robot_state: {reference: shm}\n",
     "robot_state: {base_pose: dds}\n",
     "signals: {source: hologram}\n",
-    "signals: {recording: dds}\n",
+    "signals: {recording: tape}\n",
     "dds: {namespace: n, topic_naming: ros}\n",
 ])
 def test_invalid_values_are_rejected(tmp_path, text):
@@ -82,6 +82,22 @@ def test_invalid_values_are_rejected(tmp_path, text):
     path.write_text(text, encoding="utf-8")
     with pytest.raises(config.ConfigError):
         config.load_pump_config(path, "usb")
+
+
+def test_dds_recording_flag_needs_dds_and_names_its_topic(tmp_path):
+    path = tmp_path / "stream.yaml"
+    path.write_text("signals: {recording: dds}\n", encoding="utf-8")
+    cfg = config.load_pump_config(path, "usb")
+    assert cfg.signals.recording == "dds" and cfg.needs_dds() and not cfg.needs_shm()
+    assert cfg.dds.topics.recording_state == "recording/state"
+    path.write_text("signals: {recording: dds}\ndds: {topics: {recording_state: rec/flag}}\n", encoding="utf-8")
+    assert config.load_pump_config(path, "usb").dds.topics.recording_state == "rec/flag"
+
+
+def test_packaged_isaac_dds_config_reads_recording_from_dds():
+    cfg = config.load_pump_config(config.packaged_path("configs/stream_dds_isaac.yaml"), "dds")
+    assert cfg.signals.source is SourceKind.ISAAC and cfg.signals.recording == "dds"
+    assert cfg.dds.topics.recording_state == "recording/state" and cfg.needs_dds()
 
 
 def test_shm_fields_need_a_shm_capable_source(tmp_path):

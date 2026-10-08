@@ -78,6 +78,32 @@ be lost. The receiver seeds `last_seen` from the first record of a connection
 and applies `(new - last_seen) % 2` toggles on change. The resulting state
 comes back to the headset in `Signals.recording`.
 
+When the recorder runs in another process than the VRS1 receiver, the
+receiver relays the counter on DDS and the recorder reports back; see "DDS
+teleop signal topics" below.
+
+### DDS teleop signal topics (`vr_link.messages.teleop_dds`)
+
+Two bare igris_c_sdk topics (the `ChannelFactory` prefixes the namespace)
+carry the controller state to a recorder and the recorder's state to the HUD.
+Both reuse the vendored `sensor_msgs/Joy` type `Joy_`; `header.frame_id` is a
+layout tag and decoders ignore any other tag.
+
+| Topic | Direction | `frame_id` | `buttons` (int32) | `axes` (float32) |
+|---|---|---|---|---|
+| `vr/controller` | VRS1 receiver (`igris_c_gmr`) -> recorder, every producer tick while the skeleton is connected | `vr_link.controller.v1` | `[record_toggle_count, session_id, connected]` | left then right `ControllerInput`: `trigger, grip, button_first, button_second, button_thumbstick, thumbstick_x, thumbstick_y` (14) |
+| `recording/state` | recorder (hit-tasks Isaac bridge, a robot-side recorder) -> `vr-link-stream`, ~10 Hz and on change | `vr_link.recording.v1` | `[recording, demo_index]` (`-1` = no demo open) | none |
+
+`session_id` is the relay's counter of headset (re)connections: DDS hides the
+TCP connection boundary, so the consumer re-seeds the parity rule when it
+changes instead of reading a restarted counter as presses
+(`RecordToggleTracker`). `vr-link-stream` reads `recording/state` when
+`signals.recording: dds` and reports `false` after 1 s of silence. Publishers
+and latest-value subscribers for both topics live in
+`vr_link.network.dds.teleop`; any process holding an SDK participant hosts
+them (`factory=None` uses the SDK singleton, or pass its own
+`ChannelFactory`).
+
 ## Uplink data conventions (`VRState`)
 
 - Poses are in the **simulation world frame**: Z-up, right-handed, meters,
@@ -176,7 +202,7 @@ optional extra and is imported lazily by the module that needs it:
 | `video` | PyAV | `vr_link.video.encoder`, `vr_link.pipeline`, `vr-link-stream` |
 | `yaml` | pyyaml | calibration YAML files, stream configs |
 | `calibration` | OpenCV, pyyaml | `vr-link-capture-checkerboard`, `vr-link-calibrate-cams`, the DDS camera source (JPEG decode) |
-| `dds` | (marker only) | `vr_link.network.dds` and `vr_link.sources.dds_camera` need the `igris_c_sdk` Python binding: a py3.12 wheel a human builds from the `thirdparty/igris_c_sdk` submodule (`task wheel`) and installs with `pixi run install-sdk` (or `IGRIS_C_SDK_ROOT`). vr_link only subscribes. |
+| `dds` | (marker only) | `vr_link.network.dds` and `vr_link.sources.dds_camera` need the `igris_c_sdk` Python binding: a py3.12 wheel a human builds from the `thirdparty/igris_c_sdk` submodule (`task wheel`) and installs with `pixi run install-sdk` (or `IGRIS_C_SDK_ROOT`). |
 
 Consumers install editable from their submodule checkout (`pip install -e
 <path>[video]`, or a uv/pixi path source) and re-run that install after
@@ -206,7 +232,10 @@ Layout:
 - `vr_link.network.dds` — `DdsChannel` (process-wide `ChannelFactory`),
   `StampedSubscription` + extractors for `LowState_`, `MasterArmState_`
   (`gmr/refstate`), `HandState_`, `HandCmd_`, and
-  `start_state_subscriptions(...)`.
+  `start_state_subscriptions(...)`; `teleop` with the `Joy_` publishers and
+  latest-value subscribers for `vr/controller` and `recording/state`.
+- `vr_link.messages.teleop_dds` — the layout of those two topics (constants,
+  `encode_*`/`decode_*` on plain lists, `RecordToggleTracker`); no SDK import.
 - `vr_link.utils.time_sync` — `StampedRingBuffer.nearest(target_ns,
   tolerance_ns)`: the frame/state matching the headset used to do.
 - `vr_link.video.encoder` — `H264Encoder` (PyAV, Annex-B, SPS/PPS on every
@@ -266,12 +295,13 @@ calibration: {enable, host, port: 9101, provider: yaml|json|ideal_from_source|id
               yaml, json, image_width, image_height, request_timeout,
               ideal: {model: pinhole|fisheye_equidistant, fovy_deg, focal_px, cx, cy, toe_out_deg, baseline_mm}}
 dds:         {domain_id, namespace, topic_naming: native|ros_compatible, config_uri,
-              camera_topic, frame_id, topics: {lowstate, handstate, handcmd, refstate}, buffer_capacity}
+              camera_topic, frame_id, topics: {lowstate, handstate, handcmd, refstate, recording_state},
+              buffer_capacity}
 shm:         {shm_name, read_timeout_sec}
 robot_state: {actual: dds|shm|none, reference: dds|none, hand_actual: dds|shm|none,
               hand_command: dds|none, base_pose: shm|none,
               tolerances_ms: {actual: 5, reference: 15, hand_actual: 40, hand_command: 40}}
-signals:     {source: robot|mujoco|isaac|unknown, recording: shm|none}
+signals:     {source: robot|mujoco|isaac|unknown, recording: shm|dds|none}
 ```
 
 Calibration providers: `yaml`/`json` serve a measured file (the real robot);

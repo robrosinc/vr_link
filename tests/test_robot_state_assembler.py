@@ -79,4 +79,6 @@ def test_signals_provider():
     assert provider.sample(None) == provider.sample(None)
     assert SignalsProvider(SignalsSpec(source=SourceKind.ROBOT)).sample(None).source is SourceKind.ROBOT
     with pytest.raises(ValueError):
-        SignalsSpec(recording="dds").validate()
+        SignalsSpec(recording="tape").validate()
+    with pytest.raises(ValueError):
+        SignalsProvider(SignalsSpec(recording="dds"))  # needs the recording/state subscriber

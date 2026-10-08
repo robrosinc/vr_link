@@ -1,7 +1,10 @@
-"""igris_c_sdk (CycloneDDS) access: import, channel singleton, stamped subscribers.
+"""igris_c_sdk (CycloneDDS) access: import, channel singleton, subscribers and signal publishers.
 
-vr_link only *subscribes* (lowstate, handstate, handcmd, gmr/refstate, the
-camera image topic); it never publishes on the robot's DDS domain. The SDK
+Robot-state inputs are subscriptions (lowstate, handstate, handcmd,
+gmr/refstate, the camera image topic). :mod:`.teleop` adds the teleop signal
+topics (``vr/controller``, ``recording/state``) as ``Joy_`` publishers and
+subscribers that any process holding an SDK participant can host. Robot
+control topics (lowcmd, handcmd, services) are never written here. The SDK
 Python binding is not on PyPI: it is a wheel a human builds from the
 ``thirdparty/igris_c_sdk`` submodule (``task wheel``) and installs with
 ``pixi run install-sdk``. Nothing in this package imports it at module load.
@@ -71,4 +74,10 @@ from .subscribers import (  # noqa: E402,F401
     motor_cmd_q_by_id,
     motor_state_q,
     start_state_subscriptions,
+)
+from .teleop import (  # noqa: E402,F401
+    ControllerStatePublisher,
+    ControllerStateSubscriber,
+    RecordingStatePublisher,
+    RecordingStateSubscriber,
 )
