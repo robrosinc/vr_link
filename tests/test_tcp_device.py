@@ -62,7 +62,22 @@ def test_round_trip_fills_poses_and_controller_inputs():
     assert state.right_input.button_first == pytest.approx(1.0)
     assert state.left_input.trigger == pytest.approx(0.25, abs=1e-6)
     assert state.left_input.thumbstick == pytest.approx((0.1, -0.2), abs=1e-6)
+    assert state.left_input.tracked is False and state.right_input.tracked is False
     assert state.head.valid and state.head.position_m[2] == pytest.approx(1.7, abs=1e-6)
+
+
+def test_controller_tracked_round_trips_and_is_omitted_when_false():
+    # A record with both controllers untracked carries no `tracked` field, so a
+    # 2.0 reader sees the same bytes and a 2.1 reader gets the default.
+    untracked = tcp.build_vr_state_record(_joints(), valid_mask=ALL_VALID_MASK, timestamp_ns=1)
+    held = tcp.build_vr_state_record(
+        _joints(), valid_mask=ALL_VALID_MASK, timestamp_ns=1, left_input=types.ControllerInput(tracked=True)
+    )
+    assert len(held) > len(untracked)
+    state = tcp.decode_vr_state_payload(_extract(untracked)[0], timestamp=1.0)
+    assert state.left_input.tracked is False and state.right_input.tracked is False
+    state = tcp.decode_vr_state_payload(_extract(held)[0], timestamp=1.0)
+    assert state.left_input.tracked is True and state.right_input.tracked is False
 
 
 def test_record_toggle_count_round_trips_and_defaults_to_zero():

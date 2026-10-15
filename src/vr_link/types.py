@@ -107,6 +107,9 @@ class ControllerInput:
     button_second: float = 0.0  # right: B, left: Y
     button_thumbstick: float = 0.0
     thumbstick: tuple[float, float] = (0.0, 0.0)  # (x, y), each in [-1, 1]
+    # The XR runtime tracks this controller (it is in the operator's hand), 2.1.
+    # False from senders without the field; then only input activity tells.
+    tracked: bool = False
 
 
 @dataclass(frozen=True)

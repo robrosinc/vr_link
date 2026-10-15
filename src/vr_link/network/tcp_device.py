@@ -104,6 +104,9 @@ def _append_controller_input(builder: flatbuffers.Builder, controller: Controlle
     _vr_link.ControllerInputAddButtonThumbstick(builder, controller.button_thumbstick)
     _vr_link.ControllerInputAddThumbstickX(builder, controller.thumbstick[0])
     _vr_link.ControllerInputAddThumbstickY(builder, controller.thumbstick[1])
+    if controller.tracked:
+        # Default false: omitted when false so pre-2.1 records stay byte-identical.
+        _vr_link.ControllerInputAddTracked(builder, True)
     return _vr_link.ControllerInputEnd(builder)
 
 
@@ -216,6 +219,7 @@ def _decoded_controller_input(controller) -> ControllerInput:
         button_second=controller.ButtonSecond(),
         button_thumbstick=controller.ButtonThumbstick(),
         thumbstick=(controller.ThumbstickX(), controller.ThumbstickY()),
+        tracked=bool(controller.Tracked()),
     )
 
 

@@ -35,6 +35,10 @@ table ControllerInput {
   button_thumbstick: float;  // thumbstick click
   thumbstick_x: float;       // [-1, 1]
   thumbstick_y: float;       // [-1, 1]
+  // 2.1: the XR runtime currently tracks this controller (the operator holds
+  // it). Lets receivers tell "controller in hand, idle" from "bare hand out
+  // of view" when hand tracking is off; false from senders without the field.
+  tracked: bool = false;
 }
 
 // Hand-tracking keypoints for one hand, for finger teleoperation. The sender

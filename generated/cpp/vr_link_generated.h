@@ -274,7 +274,8 @@ struct ControllerInput FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_BUTTON_SECOND = 10,
     VT_BUTTON_THUMBSTICK = 12,
     VT_THUMBSTICK_X = 14,
-    VT_THUMBSTICK_Y = 16
+    VT_THUMBSTICK_Y = 16,
+    VT_TRACKED = 18
   };
   float trigger() const {
     return GetField<float>(VT_TRIGGER, 0.0f);
@@ -297,6 +298,9 @@ struct ControllerInput FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   float thumbstick_y() const {
     return GetField<float>(VT_THUMBSTICK_Y, 0.0f);
   }
+  bool tracked() const {
+    return GetField<uint8_t>(VT_TRACKED, 0) != 0;
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -307,6 +311,7 @@ struct ControllerInput FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyField<float>(verifier, VT_BUTTON_THUMBSTICK, 4) &&
            VerifyField<float>(verifier, VT_THUMBSTICK_X, 4) &&
            VerifyField<float>(verifier, VT_THUMBSTICK_Y, 4) &&
+           VerifyField<uint8_t>(verifier, VT_TRACKED, 1) &&
            verifier.EndTable();
   }
 };
@@ -336,6 +341,9 @@ struct ControllerInputBuilder {
   void add_thumbstick_y(float thumbstick_y) {
     fbb_.AddElement<float>(ControllerInput::VT_THUMBSTICK_Y, thumbstick_y, 0.0f);
   }
+  void add_tracked(bool tracked) {
+    fbb_.AddElement<uint8_t>(ControllerInput::VT_TRACKED, static_cast<uint8_t>(tracked), 0);
+  }
   explicit ControllerInputBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -355,7 +363,8 @@ inline ::flatbuffers::Offset<ControllerInput> CreateControllerInput(
     float button_second = 0.0f,
     float button_thumbstick = 0.0f,
     float thumbstick_x = 0.0f,
-    float thumbstick_y = 0.0f) {
+    float thumbstick_y = 0.0f,
+    bool tracked = false) {
   ControllerInputBuilder builder_(_fbb);
   builder_.add_thumbstick_y(thumbstick_y);
   builder_.add_thumbstick_x(thumbstick_x);
@@ -364,6 +373,7 @@ inline ::flatbuffers::Offset<ControllerInput> CreateControllerInput(
   builder_.add_button_first(button_first);
   builder_.add_grip(grip);
   builder_.add_trigger(trigger);
+  builder_.add_tracked(tracked);
   return builder_.Finish();
 }
 

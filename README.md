@@ -157,6 +157,13 @@ singleton, or pass its own `ChannelFactory`).
   world-frame anchor travels separately in `wrist`. `tracked` is the
   per-frame tracking flag; when it is false the keypoints are stale
   last-known poses and must not be acted on.
+- `left_input`/`right_input` (`ControllerInput`) carry the controller
+  channels as levels and, since 2.1, `tracked`: the XR runtime currently
+  tracks that controller, i.e. the operator holds it. On PICO, hand tracking
+  and controllers are exclusive, so a receiver uses `tracked` to tell
+  "controller in hand but idle" (follow the controller, grip) from "bare hand
+  out of view" (hold the last finger/arm pose). Senders without the field
+  leave it false and receivers fall back to input activity.
 - `VRState` always carries the full current state (never deltas or edge
   events). Button presses are transmitted as levels (`0.0`/`1.0`, or analog
   in `[0, 1]`) in every record, so a latest-record-wins receiver loses

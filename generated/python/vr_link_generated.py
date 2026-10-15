@@ -140,8 +140,15 @@ class ControllerInput(object):
             return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
         return 0.0
 
+    # ControllerInput
+    def Tracked(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(18))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return False
+
 def ControllerInputStart(builder):
-    builder.StartObject(7)
+    builder.StartObject(8)
 
 def ControllerInputAddTrigger(builder, trigger):
     builder.PrependFloat32Slot(0, trigger, 0.0)
@@ -163,6 +170,9 @@ def ControllerInputAddThumbstickX(builder, thumbstickX):
 
 def ControllerInputAddThumbstickY(builder, thumbstickY):
     builder.PrependFloat32Slot(6, thumbstickY, 0.0)
+
+def ControllerInputAddTracked(builder, tracked):
+    builder.PrependBoolSlot(7, tracked, 0)
 
 def ControllerInputEnd(builder):
     return builder.EndObject()
