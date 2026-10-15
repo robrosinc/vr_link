@@ -60,6 +60,7 @@ from ..types import (
     HAND_KEYPOINT_COUNT,
     ControllerInput,
     HandTrackingState,
+    TeleopState,
     TrackedPose,
     VRDevice,
     VRInputState,
@@ -139,12 +140,15 @@ def build_vr_state_record(
     left_hand: HandTrackingState | None = None,
     right_hand: HandTrackingState | None = None,
     record_toggle_count: int = 0,
+    teleop_state: TeleopState = TeleopState.UNKNOWN,
 ) -> bytes:
     """Pack one framed VRS1 record (used by tests and any Python-side sender).
 
     ``valid_mask`` bit i marks body joint i valid; bit 24 marks the head
     slot valid. When ``left_hand``/``right_hand`` are None the hand tables are
     absent from the record (byte-identical to a pre-hand-tracking record).
+    ``teleop_state`` UNKNOWN leaves the field at its default (byte-identical to
+    a pre-2.1 record).
     """
 
     if len(joints) != BODY_JOINT_COUNT:
@@ -166,6 +170,8 @@ def build_vr_state_record(
     _vr_link.VRStateStart(builder)
     _vr_link.VRStateAddTimestampNs(builder, timestamp_ns & 0xFFFFFFFFFFFFFFFF)
     _vr_link.VRStateAddRecordToggleCount(builder, record_toggle_count & 0xFFFFFFFF)
+    if int(teleop_state) != int(TeleopState.UNKNOWN):
+        _vr_link.VRStateAddTeleopState(builder, int(TeleopState(teleop_state)))
     _vr_link.VRStateAddBodyJoints(builder, joints_offset)
     # Struct fields must be created inline while their table is being built.
     head_position, head_quat = head
@@ -312,6 +318,7 @@ def decode_vr_state_payload(
             right_hand=_decoded_hand_state(state.RightHand()),
             connected=True,
             record_toggle_count=state.RecordToggleCount(),
+            teleop_state=TeleopState.from_wire(state.TeleopState()),
         )
     except Exception:  # noqa: BLE001 - unverifiable buffer, see docstring
         logger.warning("Dropping undecodable VRS1 record.", exc_info=True)

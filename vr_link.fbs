@@ -61,6 +61,9 @@ table HandState {
   keypoints: [Pose];
 }
 
+// Headset teleop control state machine (vr_system ETeleopControlState + Unknown).
+enum TeleopState : ubyte { Unknown = 0, Stopped = 1, Countdown = 2, Resuming = 3, Active = 4, Paused = 5 }
+
 // One snapshot of VR tracking + controller input, sent at the tracking rate.
 // Always carries the full current state (never deltas/events) so a receiver
 // that keeps only the newest record loses nothing on packet drop.
@@ -90,6 +93,13 @@ table VRState {
   // sampling). The receiver applies (new - last_seen) % 2 toggles and seeds
   // last_seen from the first record of a connection.
   record_toggle_count: uint;
+
+  // Headset teleop control state at the time of this record (2.1). State, not
+  // an event: the receiver detects transitions itself (e.g. Resuming starts
+  // the robot-side convergence ramp). Paused/Countdown records are frozen
+  // snapshots re-sent with fresh timestamps; this field is always live.
+  // Unknown (0) is what senders older than this field produce.
+  teleop_state: TeleopState = Unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -186,10 +196,23 @@ table RobotState {
   base_pose: Pose;
 }
 
-// Sender-side flags. Replaces the 1.x SimStatus record.
+// Sender-side flags. Replaces the 1.x SimStatus record. Sent with every video
+// frame and, when the source delivers no frames (NO CAMERA targets), as a
+// periodic state-only heartbeat together with RobotState.
 table Signals {
   recording: bool;                 // episode data recording active on the PC side
   source: SourceKind = Unknown;
+
+  // Teleop producer feedback (2.1): the robot-side reference is converging
+  // from the robot's measured pose to the operator's pose (after Start/Resume
+  // or a low-level mode entry); progress 0..1. False/0 while idle or when the
+  // producer does not report.
+  converging: bool = false;
+  converge_progress: float = 0.0;
+  // The producer holds the robot arm at its last pose because the operator's
+  // bare hand is not tracked (no controller, hand occluded). Per side.
+  arm_hold_left: bool = false;
+  arm_hold_right: bool = false;
 }
 
 union Message { VideoFrame, Calibration, CalibrationRequest, RobotState, Signals }

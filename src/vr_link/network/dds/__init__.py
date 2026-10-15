@@ -81,6 +81,8 @@ from .subscribers import (  # noqa: E402,F401
 from .teleop import (  # noqa: E402,F401
     ControllerStatePublisher,
     ControllerStateSubscriber,
+    MotionFeedbackPublisher,
+    MotionFeedbackSubscriber,
     RecordingStatePublisher,
     RecordingStateSubscriber,
 )

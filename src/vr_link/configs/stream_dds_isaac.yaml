@@ -58,3 +58,4 @@ robot_state:
 signals:
   source: isaac
   recording: dds            # the bridge's recording/state topic; false when it is silent for 1 s
+  motion_feedback: dds            # igris_c_teleop teleop/motion_feedback -> Signals.converging / arm_hold_* (idle when silent for 1 s)

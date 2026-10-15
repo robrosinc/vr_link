@@ -1,4 +1,12 @@
-"""``Signals``: sender-side flags (replaces the 1.x SimStatus record)."""
+"""``Signals``: sender-side flags (replaces the 1.x SimStatus record).
+
+2.1 adds the teleop producer feedback (``converging``, ``converge_progress``,
+``arm_hold_left``/``arm_hold_right``) that the headset HUD shows while the
+robot-side reference converges to the operator or an arm is held because the
+operator's bare hand is not tracked. The sender fills them from the producer's
+``teleop/motion_feedback`` DDS topic (:mod:`vr_link.messages.teleop_dds`); they default
+to idle when no producer reports.
+"""
 
 from __future__ import annotations
 
@@ -29,13 +37,25 @@ class SourceKind(enum.IntEnum):
 class SignalsSample:
     recording: bool = False
     source: SourceKind = SourceKind.UNKNOWN
+    # Teleop producer feedback (2.1); idle defaults when the producer does not report.
+    converging: bool = False
+    converge_progress: float = 0.0  # 0..1 while converging
+    arm_hold_left: bool = False
+    arm_hold_right: bool = False
 
 
 def build_signals_payload(sample: SignalsSample, *, seq: int, wall_ns: int, sim_ns: int = 0) -> bytes:
+    progress = float(sample.converge_progress)
+    if not progress == progress:  # NaN never goes on the wire
+        progress = 0.0
     builder = flatbuffers.Builder(64)
     _vr_link.SignalsStart(builder)
     _vr_link.SignalsAddRecording(builder, bool(sample.recording))
     _vr_link.SignalsAddSource(builder, int(sample.source))
+    _vr_link.SignalsAddConverging(builder, bool(sample.converging))
+    _vr_link.SignalsAddConvergeProgress(builder, min(1.0, max(0.0, progress)))
+    _vr_link.SignalsAddArmHoldLeft(builder, bool(sample.arm_hold_left))
+    _vr_link.SignalsAddArmHoldRight(builder, bool(sample.arm_hold_right))
     body = _vr_link.SignalsEnd(builder)
     return finish_envelope(builder, body, _vr_link.Message.Signals, seq=seq, wall_ns=wall_ns, sim_ns=sim_ns)
 
@@ -46,4 +66,11 @@ def decode_signals(env: DecodedEnvelope) -> SignalsSample:
         source = SourceKind(signals.Source())
     except ValueError:
         source = SourceKind.UNKNOWN
-    return SignalsSample(bool(signals.Recording()), source)
+    return SignalsSample(
+        recording=bool(signals.Recording()),
+        source=source,
+        converging=bool(signals.Converging()),
+        converge_progress=float(signals.ConvergeProgress()),
+        arm_hold_left=bool(signals.ArmHoldLeft()),
+        arm_hold_right=bool(signals.ArmHoldRight()),
+    )

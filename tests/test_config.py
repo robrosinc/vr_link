@@ -128,3 +128,22 @@ def test_path_prefixes_and_data_root(monkeypatch, tmp_path):
     assert not hasattr(config, "LOCAL_PREFIX") and not hasattr(config, "local_root")
     monkeypatch.setenv(config.DATA_DIR_ENV, str(tmp_path / "vrl"))
     assert config.resolve_data_path("data:captures") == tmp_path / "vrl" / "captures"
+
+
+def test_motion_feedback_needs_dds_and_names_its_topic(tmp_path):
+    path = tmp_path / "s.yaml"
+    path.write_text("signals: {motion_feedback: dds}\n", encoding="utf-8")
+    cfg = config.load_pump_config(path, "usb")
+    assert cfg.signals.motion_feedback == "dds" and cfg.needs_dds() and not cfg.needs_shm()
+    assert cfg.dds.topics.motion_feedback == "teleop/motion_feedback"
+    path.write_text("signals: {motion_feedback: dds}\ndds: {topics: {motion_feedback: teleop/feedback}}\n", encoding="utf-8")
+    assert config.load_pump_config(path, "usb").dds.topics.motion_feedback == "teleop/feedback"
+    path.write_text("signals: {motion_feedback: pipe}\n", encoding="utf-8")
+    with pytest.raises(config.ConfigError):
+        config.load_pump_config(path, "usb")
+
+
+@pytest.mark.parametrize("kind", config.SOURCE_KINDS)
+def test_packaged_configs_read_the_motion_feedback_from_dds(kind):
+    cfg = config.load_pump_config(config.default_config_path(kind), kind)
+    assert cfg.signals.motion_feedback == "dds" and cfg.needs_dds()

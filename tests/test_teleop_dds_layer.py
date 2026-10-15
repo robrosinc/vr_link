@@ -229,3 +229,36 @@ def test_signals_provider_reads_the_dds_recording_flag(fake_sdk):
 
 def test_state_topics_carry_the_recording_state_default():
     assert DdsStateTopics().recording_state == RECORDING_STATE_TOPIC
+
+
+def test_motion_feedback_subscriber_reports_stale_as_idle_and_feeds_signals(fake_sdk, monkeypatch):
+    import vr_link.network.dds.teleop as teleop
+    from vr_link.messages.teleop_dds import MOTION_FEEDBACK_TOPIC, MotionFeedbackSample
+    from vr_link.network.dds.teleop import MotionFeedbackPublisher, MotionFeedbackSubscriber
+
+    clock = [50.0]
+    monkeypatch.setattr(teleop.time, "monotonic", lambda: clock[0])
+    subscriber = MotionFeedbackSubscriber(fake_sdk)
+    subscriber.start()
+    publisher = MotionFeedbackPublisher(fake_sdk)
+    assert subscriber.topic == MOTION_FEEDBACK_TOPIC == DdsStateTopics().motion_feedback
+    assert subscriber.state() == MotionFeedbackSample()
+    publisher.publish(MotionFeedbackSample(converging=True, converge_progress=0.25, arm_hold_left=True))
+    live = subscriber.state()
+    assert live.converging and live.converge_progress == pytest.approx(0.25) and live.arm_hold_left and not live.arm_hold_right
+    clock[0] += 1.1
+    assert subscriber.state(max_age_s=1.0) == MotionFeedbackSample()  # the producer went quiet
+
+    spec = SignalsSpec(source=SourceKind.ROBOT, motion_feedback="dds")
+    with pytest.raises(ValueError):
+        SignalsProvider(spec)  # dds motion_feedback needs the subscriber
+    provider = SignalsProvider(spec, motion_feedback=subscriber)
+    idle = provider.sample(None)
+    assert not idle.converging and idle.converge_progress == 0.0 and not idle.arm_hold_left and not idle.arm_hold_right
+    publisher.publish(MotionFeedbackSample(converging=True, converge_progress=0.6, arm_hold_right=True))
+    sample = provider.sample(None)
+    assert sample.converging and sample.converge_progress == pytest.approx(0.6) and sample.arm_hold_right and sample.source is SourceKind.ROBOT
+    publisher.publish(MotionFeedbackSample(converging=False, converge_progress=1.0))
+    assert provider.sample(None).converge_progress == 0.0  # progress is reported only while converging
+    with pytest.raises(ValueError):
+        SignalsSpec(motion_feedback="pipe").validate()

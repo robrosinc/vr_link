@@ -100,3 +100,21 @@ def test_toggle_tracker_reseeds_on_a_new_session():
     assert tracker.update(_controller(count=0, session=2)) == 1
     tracker.reset()
     assert not tracker.seeded and tracker.update(_controller(count=5, session=2)) == 0
+
+
+def test_motion_feedback_round_trip_and_idle_default():
+    sample = td.MotionFeedbackSample(converging=True, converge_progress=0.42, arm_hold_left=False, arm_hold_right=True, stamp_ns=7)
+    frame_id, axes, buttons = td.encode_motion_feedback(sample)
+    assert frame_id == td.MOTION_FEEDBACK_FRAME_ID and td.MOTION_FEEDBACK_TOPIC == "teleop/motion_feedback"
+    assert axes == [pytest.approx(0.42)] and buttons == [1, 0, 1]
+    decoded = td.decode_motion_feedback(frame_id, axes, buttons, stamp_ns=7)
+    assert decoded == replace(sample, converge_progress=pytest.approx(0.42))
+    assert td.decode_motion_feedback("gamepad", axes, buttons) is None
+    with pytest.raises(ValueError):
+        td.decode_motion_feedback(frame_id, [], buttons)
+    idle = td.MotionFeedbackSample()
+    assert idle.converging is False and idle.converge_progress == 1.0 and not idle.arm_hold_left and not idle.arm_hold_right
+    # Progress is clamped on the wire, NaN is refused.
+    assert td.encode_motion_feedback(replace(sample, converge_progress=3.0))[1] == [1.0]
+    with pytest.raises(ValueError):
+        td.encode_motion_feedback(replace(sample, converge_progress=float("nan")))

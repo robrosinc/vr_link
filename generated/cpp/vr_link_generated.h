@@ -48,6 +48,48 @@ struct SignalsBuilder;
 struct Envelope;
 struct EnvelopeBuilder;
 
+enum TeleopState : uint8_t {
+  TeleopState_Unknown = 0,
+  TeleopState_Stopped = 1,
+  TeleopState_Countdown = 2,
+  TeleopState_Resuming = 3,
+  TeleopState_Active = 4,
+  TeleopState_Paused = 5,
+  TeleopState_MIN = TeleopState_Unknown,
+  TeleopState_MAX = TeleopState_Paused
+};
+
+inline const TeleopState (&EnumValuesTeleopState())[6] {
+  static const TeleopState values[] = {
+    TeleopState_Unknown,
+    TeleopState_Stopped,
+    TeleopState_Countdown,
+    TeleopState_Resuming,
+    TeleopState_Active,
+    TeleopState_Paused
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesTeleopState() {
+  static const char * const names[7] = {
+    "Unknown",
+    "Stopped",
+    "Countdown",
+    "Resuming",
+    "Active",
+    "Paused",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameTeleopState(TeleopState e) {
+  if (::flatbuffers::IsOutRange(e, TeleopState_Unknown, TeleopState_Paused)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesTeleopState()[index];
+}
+
 enum SourceKind : uint8_t {
   SourceKind_Unknown = 0,
   SourceKind_Robot = 1,
@@ -411,7 +453,8 @@ struct VRState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_RIGHT_INPUT = 12,
     VT_LEFT_HAND = 14,
     VT_RIGHT_HAND = 16,
-    VT_RECORD_TOGGLE_COUNT = 18
+    VT_RECORD_TOGGLE_COUNT = 18,
+    VT_TELEOP_STATE = 20
   };
   uint64_t timestamp_ns() const {
     return GetField<uint64_t>(VT_TIMESTAMP_NS, 0);
@@ -437,6 +480,9 @@ struct VRState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   uint32_t record_toggle_count() const {
     return GetField<uint32_t>(VT_RECORD_TOGGLE_COUNT, 0);
   }
+  robros::vr::TeleopState teleop_state() const {
+    return static_cast<robros::vr::TeleopState>(GetField<uint8_t>(VT_TELEOP_STATE, 0));
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -453,6 +499,7 @@ struct VRState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyOffset(verifier, VT_RIGHT_HAND) &&
            verifier.VerifyTable(right_hand()) &&
            VerifyField<uint32_t>(verifier, VT_RECORD_TOGGLE_COUNT, 4) &&
+           VerifyField<uint8_t>(verifier, VT_TELEOP_STATE, 1) &&
            verifier.EndTable();
   }
 };
@@ -485,6 +532,9 @@ struct VRStateBuilder {
   void add_record_toggle_count(uint32_t record_toggle_count) {
     fbb_.AddElement<uint32_t>(VRState::VT_RECORD_TOGGLE_COUNT, record_toggle_count, 0);
   }
+  void add_teleop_state(robros::vr::TeleopState teleop_state) {
+    fbb_.AddElement<uint8_t>(VRState::VT_TELEOP_STATE, static_cast<uint8_t>(teleop_state), 0);
+  }
   explicit VRStateBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -505,7 +555,8 @@ inline ::flatbuffers::Offset<VRState> CreateVRState(
     ::flatbuffers::Offset<robros::vr::ControllerInput> right_input = 0,
     ::flatbuffers::Offset<robros::vr::HandState> left_hand = 0,
     ::flatbuffers::Offset<robros::vr::HandState> right_hand = 0,
-    uint32_t record_toggle_count = 0) {
+    uint32_t record_toggle_count = 0,
+    robros::vr::TeleopState teleop_state = robros::vr::TeleopState_Unknown) {
   VRStateBuilder builder_(_fbb);
   builder_.add_timestamp_ns(timestamp_ns);
   builder_.add_record_toggle_count(record_toggle_count);
@@ -515,6 +566,7 @@ inline ::flatbuffers::Offset<VRState> CreateVRState(
   builder_.add_left_input(left_input);
   builder_.add_head(head);
   builder_.add_body_joints(body_joints);
+  builder_.add_teleop_state(teleop_state);
   return builder_.Finish();
 }
 
@@ -527,7 +579,8 @@ inline ::flatbuffers::Offset<VRState> CreateVRStateDirect(
     ::flatbuffers::Offset<robros::vr::ControllerInput> right_input = 0,
     ::flatbuffers::Offset<robros::vr::HandState> left_hand = 0,
     ::flatbuffers::Offset<robros::vr::HandState> right_hand = 0,
-    uint32_t record_toggle_count = 0) {
+    uint32_t record_toggle_count = 0,
+    robros::vr::TeleopState teleop_state = robros::vr::TeleopState_Unknown) {
   auto body_joints__ = body_joints ? _fbb.CreateVectorOfStructs<robros::vr::Pose>(*body_joints) : 0;
   return robros::vr::CreateVRState(
       _fbb,
@@ -538,7 +591,8 @@ inline ::flatbuffers::Offset<VRState> CreateVRStateDirect(
       right_input,
       left_hand,
       right_hand,
-      record_toggle_count);
+      record_toggle_count,
+      teleop_state);
 }
 
 struct VideoFrame FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -1099,7 +1153,11 @@ struct Signals FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef SignalsBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_RECORDING = 4,
-    VT_SOURCE = 6
+    VT_SOURCE = 6,
+    VT_CONVERGING = 8,
+    VT_CONVERGE_PROGRESS = 10,
+    VT_ARM_HOLD_LEFT = 12,
+    VT_ARM_HOLD_RIGHT = 14
   };
   bool recording() const {
     return GetField<uint8_t>(VT_RECORDING, 0) != 0;
@@ -1107,11 +1165,27 @@ struct Signals FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   robros::vr::SourceKind source() const {
     return static_cast<robros::vr::SourceKind>(GetField<uint8_t>(VT_SOURCE, 0));
   }
+  bool converging() const {
+    return GetField<uint8_t>(VT_CONVERGING, 0) != 0;
+  }
+  float converge_progress() const {
+    return GetField<float>(VT_CONVERGE_PROGRESS, 0.0f);
+  }
+  bool arm_hold_left() const {
+    return GetField<uint8_t>(VT_ARM_HOLD_LEFT, 0) != 0;
+  }
+  bool arm_hold_right() const {
+    return GetField<uint8_t>(VT_ARM_HOLD_RIGHT, 0) != 0;
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint8_t>(verifier, VT_RECORDING, 1) &&
            VerifyField<uint8_t>(verifier, VT_SOURCE, 1) &&
+           VerifyField<uint8_t>(verifier, VT_CONVERGING, 1) &&
+           VerifyField<float>(verifier, VT_CONVERGE_PROGRESS, 4) &&
+           VerifyField<uint8_t>(verifier, VT_ARM_HOLD_LEFT, 1) &&
+           VerifyField<uint8_t>(verifier, VT_ARM_HOLD_RIGHT, 1) &&
            verifier.EndTable();
   }
 };
@@ -1125,6 +1199,18 @@ struct SignalsBuilder {
   }
   void add_source(robros::vr::SourceKind source) {
     fbb_.AddElement<uint8_t>(Signals::VT_SOURCE, static_cast<uint8_t>(source), 0);
+  }
+  void add_converging(bool converging) {
+    fbb_.AddElement<uint8_t>(Signals::VT_CONVERGING, static_cast<uint8_t>(converging), 0);
+  }
+  void add_converge_progress(float converge_progress) {
+    fbb_.AddElement<float>(Signals::VT_CONVERGE_PROGRESS, converge_progress, 0.0f);
+  }
+  void add_arm_hold_left(bool arm_hold_left) {
+    fbb_.AddElement<uint8_t>(Signals::VT_ARM_HOLD_LEFT, static_cast<uint8_t>(arm_hold_left), 0);
+  }
+  void add_arm_hold_right(bool arm_hold_right) {
+    fbb_.AddElement<uint8_t>(Signals::VT_ARM_HOLD_RIGHT, static_cast<uint8_t>(arm_hold_right), 0);
   }
   explicit SignalsBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -1140,8 +1226,16 @@ struct SignalsBuilder {
 inline ::flatbuffers::Offset<Signals> CreateSignals(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     bool recording = false,
-    robros::vr::SourceKind source = robros::vr::SourceKind_Unknown) {
+    robros::vr::SourceKind source = robros::vr::SourceKind_Unknown,
+    bool converging = false,
+    float converge_progress = 0.0f,
+    bool arm_hold_left = false,
+    bool arm_hold_right = false) {
   SignalsBuilder builder_(_fbb);
+  builder_.add_converge_progress(converge_progress);
+  builder_.add_arm_hold_right(arm_hold_right);
+  builder_.add_arm_hold_left(arm_hold_left);
+  builder_.add_converging(converging);
   builder_.add_source(source);
   builder_.add_recording(recording);
   return builder_.Finish();

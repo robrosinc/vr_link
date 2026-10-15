@@ -2820,8 +2820,8 @@ packages:
   timestamp: 1784250406640
 - pypi: ./
   name: vr-link
-  version: 2.0.0
-  sha256: 1dccf3a1941538e26060619862896fe1cceaa46ad194326464d92f889e2a39ac
+  version: 2.1.0
+  sha256: fcc306b64875e913c0a87e8c66cbc6de4ab132f3c7ce5e315c35356cefaa10bc
   requires_dist:
   - flatbuffers>=24,<26
   - numpy>=1.24

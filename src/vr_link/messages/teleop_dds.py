@@ -1,8 +1,8 @@
 """DDS teleoperation signals carried in igris_c_sdk ``Joy_`` messages.
 
-Two bare topics (the SDK ``ChannelFactory`` prefixes the namespace):
+Three bare topics (the SDK ``ChannelFactory`` prefixes the namespace):
 
-* ``vr/controller`` (producer -> recorder): the VRS1 receiver (``igris_c_gmr``)
+* ``vr/controller`` (producer -> recorder): the VRS1 receiver (``igris_c_teleop``)
   relays the headset controller state and the headset-UI recording toggle
   counter so a recorder in another process (the hit-tasks Isaac bridge, a
   robot-side recorder) can act on it.
@@ -10,6 +10,11 @@ Two bare topics (the SDK ``ChannelFactory`` prefixes the namespace):
   active, read by ``vr-link-stream`` for ``Signals.recording`` on the 9100
   downlink. Only the recorder knows this; the HUD must show the recorder's
   truth, not a count of button presses.
+* ``teleop/motion_feedback`` (producer -> HUD, 2.1): the teleop producer's reference
+  shaping state (convergence ramp active + progress, per-arm hold while the
+  operator's bare hand is untracked), read by ``vr-link-stream`` for the
+  ``Signals.converging`` / ``arm_hold_*`` fields. Published every producer
+  tick while the skeleton is connected; the HUD reads a stale sample as idle.
 
 ``Joy_`` (vendored ``sensor_msgs/Joy``: ``header``, ``axes[]`` float32,
 ``buttons[]`` int32) is reused so no SDK/IDL change is needed; the index layout
@@ -54,6 +59,16 @@ RECORDING_BUTTON_RECORDING = 0  # 1 while an episode recording is active
 RECORDING_BUTTON_DEMO_INDEX = 1  # the recorder's current demo id; -1 when none is open
 RECORDING_BUTTON_COUNT = 2
 
+# teleop/motion_feedback buttons (int32) and axes (float32).
+MOTION_FEEDBACK_TOPIC = "teleop/motion_feedback"
+MOTION_FEEDBACK_FRAME_ID = "vr_link.motion_feedback.v1"
+MOTION_FEEDBACK_BUTTON_CONVERGING = 0  # 1 while the convergence ramp shapes the reference
+MOTION_FEEDBACK_BUTTON_ARM_HOLD_LEFT = 1  # 1 while the left arm reference is held (hand untracked)
+MOTION_FEEDBACK_BUTTON_ARM_HOLD_RIGHT = 2
+MOTION_FEEDBACK_BUTTON_COUNT = 3
+MOTION_FEEDBACK_AXIS_CONVERGE_PROGRESS = 0  # 0..1; 1 when idle
+MOTION_FEEDBACK_AXIS_COUNT = 1
+
 INT32_MIN = -(2**31)
 INT32_MAX = 2**31 - 1
 
@@ -78,6 +93,17 @@ class RecordingStateSample:
 
     recording: bool
     demo_index: int = -1
+    stamp_ns: int = 0
+
+
+@dataclass(frozen=True)
+class MotionFeedbackSample:
+    """One ``teleop/motion_feedback`` message (teleop producer reference-shaping state)."""
+
+    converging: bool = False
+    converge_progress: float = 1.0
+    arm_hold_left: bool = False
+    arm_hold_right: bool = False
     stamp_ns: int = 0
 
 
@@ -185,6 +211,41 @@ def decode_recording_state(frame_id: str, axes: Sequence[float], buttons: Sequen
     )
 
 
+def encode_motion_feedback(sample: MotionFeedbackSample) -> Tuple[str, List[float], List[int]]:
+    """``MotionFeedbackSample`` -> ``(frame_id, axes, buttons)``."""
+
+    progress = float(sample.converge_progress)
+    if not progress == progress:
+        raise ValueError("converge_progress must not be NaN")
+    buttons = [
+        1 if sample.converging else 0,
+        1 if sample.arm_hold_left else 0,
+        1 if sample.arm_hold_right else 0,
+    ]
+    return MOTION_FEEDBACK_FRAME_ID, [min(1.0, max(0.0, progress))], buttons
+
+
+def decode_motion_feedback(frame_id: str, axes: Sequence[float], buttons: Sequence[int], *, stamp_ns: int = 0) -> Optional[MotionFeedbackSample]:
+    """``(frame_id, axes, buttons)`` -> ``MotionFeedbackSample``; ``None`` when the tag is not ours."""
+
+    if str(frame_id) != MOTION_FEEDBACK_FRAME_ID:
+        return None
+    axes_list = [float(v) for v in axes]
+    buttons_list = [int(v) for v in buttons]
+    if len(axes_list) < MOTION_FEEDBACK_AXIS_COUNT or len(buttons_list) < MOTION_FEEDBACK_BUTTON_COUNT:
+        raise ValueError(
+            f"{MOTION_FEEDBACK_FRAME_ID} needs >= {MOTION_FEEDBACK_AXIS_COUNT} axes and >= {MOTION_FEEDBACK_BUTTON_COUNT} buttons, "
+            f"got {len(axes_list)} and {len(buttons_list)}"
+        )
+    return MotionFeedbackSample(
+        converging=buttons_list[MOTION_FEEDBACK_BUTTON_CONVERGING] != 0,
+        converge_progress=axes_list[MOTION_FEEDBACK_AXIS_CONVERGE_PROGRESS],
+        arm_hold_left=buttons_list[MOTION_FEEDBACK_BUTTON_ARM_HOLD_LEFT] != 0,
+        arm_hold_right=buttons_list[MOTION_FEEDBACK_BUTTON_ARM_HOLD_RIGHT] != 0,
+        stamp_ns=int(stamp_ns),
+    )
+
+
 class RecordToggleTracker:
     """Turn the relayed ``record_toggle_count`` into start/stop toggles.
 
@@ -237,6 +298,15 @@ __all__ = [
     "CONTROLLER_RIGHT_AXIS_OFFSET",
     "CONTROLLER_TOPIC",
     "ControllerSample",
+    "MOTION_FEEDBACK_AXIS_CONVERGE_PROGRESS",
+    "MOTION_FEEDBACK_AXIS_COUNT",
+    "MOTION_FEEDBACK_BUTTON_ARM_HOLD_LEFT",
+    "MOTION_FEEDBACK_BUTTON_ARM_HOLD_RIGHT",
+    "MOTION_FEEDBACK_BUTTON_CONVERGING",
+    "MOTION_FEEDBACK_BUTTON_COUNT",
+    "MOTION_FEEDBACK_FRAME_ID",
+    "MOTION_FEEDBACK_TOPIC",
+    "MotionFeedbackSample",
     "RECORDING_BUTTON_COUNT",
     "RECORDING_BUTTON_DEMO_INDEX",
     "RECORDING_BUTTON_RECORDING",
@@ -247,7 +317,9 @@ __all__ = [
     "controller_axes",
     "controller_sample_from_vr_state",
     "decode_controller",
+    "decode_motion_feedback",
     "decode_recording_state",
     "encode_controller",
+    "encode_motion_feedback",
     "encode_recording_state",
 ]

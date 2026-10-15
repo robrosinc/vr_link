@@ -170,7 +170,9 @@ class RobotStateAssembler:
 
 
 RECORDING_SOURCES = ("shm", "dds", "none")
+MOTION_FEEDBACK_SOURCES = ("dds", "none")
 DDS_RECORDING_MAX_AGE_S = 1.0
+DDS_MOTION_FEEDBACK_MAX_AGE_S = 1.0
 
 
 @dataclass
@@ -178,28 +180,46 @@ class SignalsSpec:
     source: SourceKind = SourceKind.UNKNOWN
     # shm: the simulator's robot block flag; dds: the recorder's recording/state topic.
     recording: Literal["shm", "dds", "none"] = "none"
+    # dds: the teleop producer's teleop/motion_feedback topic -> Signals.converging / arm_hold_*.
+    motion_feedback: Literal["dds", "none"] = "none"
 
     def validate(self) -> "SignalsSpec":
         if self.recording not in RECORDING_SOURCES:
             raise ValueError(f"signals.recording: unknown source {self.recording!r}")
+        if self.motion_feedback not in MOTION_FEEDBACK_SOURCES:
+            raise ValueError(f"signals.motion_feedback: unknown source {self.motion_feedback!r}")
         return self
 
 
 class SignalsProvider:
-    """Signals for a frame: the configured source kind and the recording flag.
+    """Signals for a frame: the configured source kind, the recording flag and the producer feedback.
 
     With ``recording: dds`` the flag is the newest ``recording/state`` sample
     (:class:`~vr_link.network.dds.teleop.RecordingStateSubscriber`); a sample
     older than ``max_age_s`` reads as not recording, so a recorder that went
-    away does not leave the HUD showing a stale "recording".
+    away does not leave the HUD showing a stale "recording". ``motion_feedback: dds``
+    fills ``converging``/``converge_progress``/``arm_hold_*`` from the newest
+    ``teleop/motion_feedback`` sample the same way (stale reads as idle).
     """
 
-    def __init__(self, spec: SignalsSpec, recording_state=None, *, max_age_s: float = DDS_RECORDING_MAX_AGE_S) -> None:
+    def __init__(
+        self,
+        spec: SignalsSpec,
+        recording_state=None,
+        *,
+        motion_feedback=None,
+        max_age_s: float = DDS_RECORDING_MAX_AGE_S,
+        motion_feedback_max_age_s: float = DDS_MOTION_FEEDBACK_MAX_AGE_S,
+    ) -> None:
         self.spec = spec.validate()
         self.recording_state = recording_state
+        self.motion_feedback = motion_feedback
         self.max_age_s = float(max_age_s)
+        self.motion_feedback_max_age_s = float(motion_feedback_max_age_s)
         if self.spec.recording == "dds" and recording_state is None:
             raise ValueError("signals.recording is dds but no recording/state subscriber was given")
+        if self.spec.motion_feedback == "dds" and motion_feedback is None:
+            raise ValueError("signals.motion_feedback is dds but no teleop/motion_feedback subscriber was given")
 
     def sample(self, shm_block: Optional[ShmRobotBlock] = None) -> SignalsSample:
         recording = False
@@ -207,7 +227,20 @@ class SignalsProvider:
             recording = bool(shm_block.recording)
         elif self.spec.recording == "dds":
             recording = bool(self.recording_state.recording(self.max_age_s))
-        return SignalsSample(recording=recording, source=self.spec.source)
+        converging, progress, hold_left, hold_right = False, 0.0, False, False
+        if self.spec.motion_feedback == "dds":
+            feedback = self.motion_feedback.state(self.motion_feedback_max_age_s)
+            converging = bool(feedback.converging)
+            progress = float(feedback.converge_progress) if converging else 0.0
+            hold_left, hold_right = bool(feedback.arm_hold_left), bool(feedback.arm_hold_right)
+        return SignalsSample(
+            recording=recording,
+            source=self.spec.source,
+            converging=converging,
+            converge_progress=progress,
+            arm_hold_left=hold_left,
+            arm_hold_right=hold_right,
+        )
 
 
 __all__ = [

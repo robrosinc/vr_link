@@ -22,13 +22,18 @@ from typing import Any, Callable, List, Optional, Sequence, Tuple
 from ...messages.teleop_dds import (
     CONTROLLER_FRAME_ID,
     CONTROLLER_TOPIC,
+    MOTION_FEEDBACK_FRAME_ID,
+    MOTION_FEEDBACK_TOPIC,
     RECORDING_STATE_FRAME_ID,
     RECORDING_STATE_TOPIC,
     ControllerSample,
+    MotionFeedbackSample,
     RecordingStateSample,
     decode_controller,
+    decode_motion_feedback,
     decode_recording_state,
     encode_controller,
+    encode_motion_feedback,
     encode_recording_state,
 )
 from ...utils.clocks import split_ns, wall_ns
@@ -120,6 +125,17 @@ class RecordingStatePublisher(_JoyPublisher):
 
     def publish(self, sample: RecordingStateSample) -> bool:
         _, axes, buttons = encode_recording_state(sample)
+        return self._write(axes, buttons, sample.stamp_ns)
+
+
+class MotionFeedbackPublisher(_JoyPublisher):
+    """``teleop/motion_feedback``: hosted by the teleop producer (igris_c_teleop)."""
+
+    def __init__(self, sdk, topic: str = MOTION_FEEDBACK_TOPIC, *, factory=None, qos=None) -> None:
+        super().__init__(sdk, topic, MOTION_FEEDBACK_FRAME_ID, factory=factory, qos=qos)
+
+    def publish(self, sample: MotionFeedbackSample) -> bool:
+        _, axes, buttons = encode_motion_feedback(sample)
         return self._write(axes, buttons, sample.stamp_ns)
 
 
@@ -235,9 +251,32 @@ class RecordingStateSubscriber(_LatestJoySubscriber):
         return bool(sample.recording)
 
 
+class MotionFeedbackSubscriber(_LatestJoySubscriber):
+    """``teleop/motion_feedback`` consumer side (``vr-link-stream`` for the HUD)."""
+
+    def __init__(self, sdk, topic: str = MOTION_FEEDBACK_TOPIC, *, factory=None, qos=None) -> None:
+        super().__init__(sdk, topic, decode_motion_feedback, factory=factory, qos=qos)
+
+    def latest(self) -> Optional[Tuple[MotionFeedbackSample, float]]:
+        return super().latest()
+
+    def state(self, max_age_s: float = 1.0) -> MotionFeedbackSample:
+        """The producer's newest state, or the idle sample when nothing fresh arrived within ``max_age_s``."""
+
+        entry = self.latest()
+        if entry is None:
+            return MotionFeedbackSample()
+        sample, received = entry
+        if time.monotonic() - received > float(max_age_s):
+            return MotionFeedbackSample()
+        return sample
+
+
 __all__: List[str] = [
     "ControllerStatePublisher",
     "ControllerStateSubscriber",
+    "MotionFeedbackPublisher",
+    "MotionFeedbackSubscriber",
     "RecordingStatePublisher",
     "RecordingStateSubscriber",
 ]

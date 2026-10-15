@@ -6,6 +6,15 @@ import flatbuffers
 from flatbuffers.compat import import_numpy
 np = import_numpy()
 
+class TeleopState(object):
+    Unknown = 0
+    Stopped = 1
+    Countdown = 2
+    Resuming = 3
+    Active = 4
+    Paused = 5
+
+
 class SourceKind(object):
     Unknown = 0
     Robot = 1
@@ -343,8 +352,15 @@ class VRState(object):
             return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
         return 0
 
+    # VRState
+    def TeleopState(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
+        return 0
+
 def VRStateStart(builder):
-    builder.StartObject(8)
+    builder.StartObject(9)
 
 def VRStateAddTimestampNs(builder, timestampNs):
     builder.PrependUint64Slot(0, timestampNs, 0)
@@ -372,6 +388,9 @@ def VRStateAddRightHand(builder, rightHand):
 
 def VRStateAddRecordToggleCount(builder, recordToggleCount):
     builder.PrependUint32Slot(7, recordToggleCount, 0)
+
+def VRStateAddTeleopState(builder, teleopState):
+    builder.PrependUint8Slot(8, teleopState, 0)
 
 def VRStateEnd(builder):
     return builder.EndObject()
@@ -997,14 +1016,54 @@ class Signals(object):
             return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
         return 0
 
+    # Signals
+    def Converging(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return False
+
+    # Signals
+    def ConvergeProgress(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 0.0
+
+    # Signals
+    def ArmHoldLeft(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return False
+
+    # Signals
+    def ArmHoldRight(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return False
+
 def SignalsStart(builder):
-    builder.StartObject(2)
+    builder.StartObject(6)
 
 def SignalsAddRecording(builder, recording):
     builder.PrependBoolSlot(0, recording, 0)
 
 def SignalsAddSource(builder, source):
     builder.PrependUint8Slot(1, source, 0)
+
+def SignalsAddConverging(builder, converging):
+    builder.PrependBoolSlot(2, converging, 0)
+
+def SignalsAddConvergeProgress(builder, convergeProgress):
+    builder.PrependFloat32Slot(3, convergeProgress, 0.0)
+
+def SignalsAddArmHoldLeft(builder, armHoldLeft):
+    builder.PrependBoolSlot(4, armHoldLeft, 0)
+
+def SignalsAddArmHoldRight(builder, armHoldRight):
+    builder.PrependBoolSlot(5, armHoldRight, 0)
 
 def SignalsEnd(builder):
     return builder.EndObject()

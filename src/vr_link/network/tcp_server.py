@@ -160,6 +160,33 @@ class EnvelopeTcpServer:
             logger.warning("Client fell behind (>%d queued bytes); disconnecting it.", self._max_queue_bytes)
             self._detach_client()
 
+    def send_state(
+        self,
+        *,
+        wall_ns: int,
+        sim_ns: int = 0,
+        robot_state: Optional[RobotStateSample] = None,
+        signals: Optional[SignalsSample] = None,
+    ) -> None:
+        """Queue [Calibration once] -> Signals -> RobotState without a video frame (state heartbeat).
+
+        Used while the source delivers no frames (NO CAMERA targets, camera
+        down): the headset still gets the HUD signals and the robot state. Not
+        gated on the first key frame (state records are self-contained).
+        """
+
+        if robot_state is None and signals is None:
+            return
+        with self._lock:
+            if self._queue is None:
+                return
+            self._enqueue_calibration_locked()
+            self._enqueue_state_locked(wall_ns, sim_ns, robot_state, signals)
+            drop_client = self._queued_bytes > self._max_queue_bytes
+        if drop_client:
+            logger.warning("Client fell behind (>%d queued bytes); disconnecting it.", self._max_queue_bytes)
+            self._detach_client()
+
     # -- internals -----------------------------------------------------------
 
     def _enqueue_calibration_locked(self) -> None:

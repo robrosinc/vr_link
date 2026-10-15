@@ -45,7 +45,11 @@ payloads are at most 65536 bytes; VRL2 payloads at most 8 MiB (the headset's
 CLOCK_REALTIME of the frame or sample, `sim_ns` the simulation time (0 for
 real cameras). The `Signals` and `RobotState` records of a frame are sent
 immediately before its `VideoFrame` with the same `wall_ns`/`sim_ns` and
-consecutive `seq`; receivers pair them by that or by sender order.
+consecutive `seq`; receivers pair them by that or by sender order. Since 2.1
+the sender also emits `Signals` (and `RobotState` when it has DDS state) as a
+**heartbeat at 10 Hz while no frame arrives** (camera absent or stalled), so a
+headset without video (NO CAMERA mode) still gets the recording / convergence
+/ arm-hold state; these records carry no `VideoFrame` after them.
 
 | Body | Content |
 |---|---|
@@ -53,7 +57,7 @@ consecutive `seq`; receivers pair them by that or by sender order.
 | `Calibration` | per-eye `image_width`/`image_height` and `left`/`right` `CameraModel {fx fy cx cy k1 k2 k3 k4 r[9]}` (see "Calibration contract"). Sent once per 9100 connection (newest wins on the headset) and as the 9101 reply. |
 | `CalibrationRequest` | empty; the 9101 request body. |
 | `RobotState` | frame-matched joint state, four groups each with `*_valid` and `*_stamp_ns`: `body_actual[31]` (LowState), `body_reference[31]` (`gmr/refstate`), `hand_actual[12]` (HandState), `hand_command[12]` (`handcmd`), plus `base_pose: Pose` (valid only from simulators). An invalid group is an empty vector and must be ignored; a group the sender could not match within tolerance is invalid, never stale. |
-| `Signals` | `recording` (episode recording active on the PC side) and `source: SourceKind {Unknown, Robot, MuJoCo, Isaac}` for the HUD label. Replaces 1.x `SimStatus`. |
+| `Signals` | `recording` (episode recording active on the PC side) and `source: SourceKind {Unknown, Robot, MuJoCo, Isaac}` for the HUD label. Replaces 1.x `SimStatus`. Since 2.1 also the producer's motion feedback: `converging` (the robot reference is still ramping from the robot's measured pose to the operator after Start / Resume / low-level entry), `converge_progress` (0..1, meaningful only while `converging`), `arm_hold_left` / `arm_hold_right` (that arm is frozen because its bare hand is untracked). All default false / 0 from senders without the fields. |
 
 ### Joint orders
 
@@ -82,27 +86,48 @@ When the recorder runs in another process than the VRS1 receiver, the
 receiver relays the counter on DDS and the recorder reports back; see "DDS
 teleop signal topics" below.
 
+### Teleop session state (`VRState.teleop_state`, 2.1)
+
+`teleop_state: TeleopState {Unknown, Stopped, Countdown, Resuming, Active,
+Paused}` is the headset's control session state at the time of the record,
+stamped on every record including the frozen snapshots re-sent while Paused /
+Countdown. It is a level, not an event: the receiver detects the edge into
+`Resuming` (Start and Resume) and runs its convergence ramp from the robot's
+measured pose toward the operator (igris_c_teleop `ConvergeGate`), instead of
+guessing from pose discontinuities. `Unknown` (the FlatBuffers default) is
+what a sender without the field produces; the receiver then falls back to the
+skeleton-connection edge as its trigger. `build_vr_state_record` omits the
+field for `Unknown` so legacy records stay byte-identical;
+`decode_vr_state_payload` exposes it as `VRInputState.teleop_state`
+(`vr_link.types.TeleopState`).
+
 ### DDS teleop signal topics (`vr_link.messages.teleop_dds`)
 
-Two bare igris_c_sdk topics (the `ChannelFactory` prefixes the namespace)
-carry the controller state to a recorder and the recorder's state to the HUD.
-Both reuse the vendored `sensor_msgs/Joy` type `Joy_`; `header.frame_id` is a
-layout tag and decoders ignore any other tag.
+Three bare igris_c_sdk topics (the `ChannelFactory` prefixes the namespace)
+carry the controller state to a recorder, the recorder's state to the HUD and
+the producer's motion feedback to the HUD. All reuse the vendored
+`sensor_msgs/Joy` type `Joy_`; `header.frame_id` is a layout tag and decoders
+ignore any other tag.
 
 | Topic | Direction | `frame_id` | `buttons` (int32) | `axes` (float32) |
 |---|---|---|---|---|
-| `vr/controller` | VRS1 receiver (`igris_c_gmr`) -> recorder, every producer tick while the skeleton is connected | `vr_link.controller.v1` | `[record_toggle_count, session_id, connected]` | left then right `ControllerInput`: `trigger, grip, button_first, button_second, button_thumbstick, thumbstick_x, thumbstick_y` (14) |
+| `vr/controller` | VRS1 receiver (`igris_c_teleop` producer) -> recorder, every producer tick while the skeleton is connected | `vr_link.controller.v1` | `[record_toggle_count, session_id, connected]` | left then right `ControllerInput`: `trigger, grip, button_first, button_second, button_thumbstick, thumbstick_x, thumbstick_y` (14) |
 | `recording/state` | recorder (hit-tasks Isaac bridge, a robot-side recorder) -> `vr-link-stream`, ~10 Hz and on change | `vr_link.recording.v1` | `[recording, demo_index]` (`-1` = no demo open) | none |
+| `teleop/motion_feedback` | VRS1 receiver (`igris_c_teleop` producer) -> `vr-link-stream`, every producer tick while the skeleton is connected | `vr_link.motion_feedback.v1` | `[converging, arm_hold_left, arm_hold_right]` | `[converge_progress]` (0..1) |
 
 `session_id` is the relay's counter of headset (re)connections: DDS hides the
 TCP connection boundary, so the consumer re-seeds the parity rule when it
 changes instead of reading a restarted counter as presses
 (`RecordToggleTracker`). `vr-link-stream` reads `recording/state` when
-`signals.recording: dds` and reports `false` after 1 s of silence. Publishers
-and latest-value subscribers for both topics live in
-`vr_link.network.dds.teleop`; any process holding an SDK participant hosts
-them (`factory=None` uses the SDK singleton, or pass its own
-`ChannelFactory`).
+`signals.recording: dds` and reports `false` after 1 s of silence, and
+`teleop/motion_feedback` when `signals.motion_feedback: dds` (the packaged
+configs) and reports idle (not converging, no hold) after 1 s of silence; both
+land in the `Signals` record. The producer sends its feedback over DDS rather
+than back on the VRS1 socket because the headset HUD is fed by the
+`vr-link-stream` process, not by the producer. Publishers and latest-value
+subscribers for the three topics live in `vr_link.network.dds.teleop`; any
+process holding an SDK participant hosts them (`factory=None` uses the SDK
+singleton, or pass its own `ChannelFactory`).
 
 ## Uplink data conventions (`VRState`)
 
@@ -135,7 +160,8 @@ them (`factory=None` uses the SDK singleton, or pass its own
 - `VRState` always carries the full current state (never deltas or edge
   events). Button presses are transmitted as levels (`0.0`/`1.0`, or analog
   in `[0, 1]`) in every record, so a latest-record-wins receiver loses
-  nothing when packets drop.
+  nothing when packets drop. `teleop_state` follows the same rule (a level
+  the receiver edge-detects).
 
 ## Calibration contract
 
@@ -202,7 +228,7 @@ optional extra and is imported lazily by the module that needs it:
 | `video` | PyAV | `vr_link.video.encoder`, `vr_link.pipeline`, `vr-link-stream` |
 | `yaml` | pyyaml | calibration YAML files, stream configs |
 | `calibration` | OpenCV, pyyaml | `vr-link-capture-checkerboard`, `vr-link-calibrate-cams`, the DDS camera source (JPEG decode) |
-| `dds` | (marker only) | `vr_link.network.dds` and `vr_link.sources.dds_camera` need the `igris_c_sdk` Python binding, a py3.12 wheel that is not on PyPI. Since 2.1 vr_link vendors no SDK: the host repository that runs vr_link (igris_c_gmr, hit-tasks) builds the wheel from its own `igris_c_sdk` submodule pin and installs it into the shared env, or `IGRIS_C_SDK_ROOT` points at a checkout. |
+| `dds` | (marker only) | `vr_link.network.dds` and `vr_link.sources.dds_camera` need the `igris_c_sdk` Python binding, a py3.12 wheel that is not on PyPI. Since 2.1 vr_link vendors no SDK: the host repository that runs vr_link (igris_c_teleop, hit-tasks) builds the wheel from its own `igris_c_sdk` submodule pin and installs it into the shared env, or `IGRIS_C_SDK_ROOT` points at a checkout. |
 
 Consumers install editable from their submodule checkout (`pip install -e
 <path>[video]`, or a uv/pixi path source) and re-run that install after
@@ -223,8 +249,9 @@ Layout:
   `robot_state` (`RobotStateSample`, joint-order constants), `signals`.
 - `vr_link.network.tcp_server` — `EnvelopeTcpServer`: one headset at a time,
   per-connection writer queue, `Calibration` once, `send_video(...,
-  robot_state=, signals=)`; drops delta frames until a fresh connection's
-  first IDR and disconnects a receiver that falls behind.
+  robot_state=, signals=)` and `send_state(wall_ns=, robot_state=, signals=)`
+  (the frameless heartbeat, not keyframe-gated); drops delta frames until a
+  fresh connection's first IDR and disconnects a receiver that falls behind.
 - `vr_link.network.calibration_server` — `CalibrationServer(provider,
   port=9101)` answering `CalibrationRequest` from a provider callable
   evaluated per request (`yaml_file_provider`, `json_file_provider`,
@@ -233,9 +260,11 @@ Layout:
   `StampedSubscription` + extractors for `LowState_`, `MasterArmState_`
   (`gmr/refstate`), `HandState_`, `HandCmd_`, and
   `start_state_subscriptions(...)`; `teleop` with the `Joy_` publishers and
-  latest-value subscribers for `vr/controller` and `recording/state`.
-- `vr_link.messages.teleop_dds` — the layout of those two topics (constants,
-  `encode_*`/`decode_*` on plain lists, `RecordToggleTracker`); no SDK import.
+  latest-value subscribers for `vr/controller`, `recording/state` and
+  `teleop/motion_feedback`.
+- `vr_link.messages.teleop_dds` — the layout of those three topics (constants,
+  `encode_*`/`decode_*` on plain lists, `RecordToggleTracker`,
+  `MotionFeedbackSample`); no SDK import.
 - `vr_link.utils.time_sync` — `StampedRingBuffer.nearest(target_ns,
   tolerance_ns)`: the frame/state matching the headset used to do.
 - `vr_link.video.encoder` — `H264Encoder` (PyAV, Annex-B, SPS/PPS on every
@@ -246,8 +275,10 @@ Layout:
   (JPEG topic on a `DdsChannel`).
 - `vr_link.pipeline` — `config` (YAML schema below), `pump.StreamPump`
   (source -> encoder -> server, with per-frame `RobotState`/`Signals`
-  providers), `robot_state.RobotStateAssembler` (per-field `dds`/`shm`/`none`
-  with tolerances 5/15/40/40 ms) and `SignalsProvider`.
+  providers and the 10 Hz state heartbeat while the source yields no frame,
+  `state_heartbeat_hz`), `robot_state.RobotStateAssembler` (per-field
+  `dds`/`shm`/`none` with tolerances 5/15/40/40 ms) and `SignalsProvider`
+  (recording state + motion feedback).
 - `vr_link.calibration` — `schema` (mapping validation, JSON file form,
   `TAN_SERIES_K`), `ideal` (ideal stereo model from a rig description or live
   camera intrinsics/poses, MuJoCo metadata adapter), `fov`, `yaml_io`.
@@ -298,13 +329,14 @@ calibration: {enable, host, port: 9101, provider: yaml|json|ideal_from_source|id
               yaml, json, image_width, image_height, request_timeout,
               ideal: {model: pinhole|fisheye_equidistant, fovy_deg, focal_px, cx, cy, toe_out_deg, baseline_mm}}
 dds:         {domain_id, namespace, topic_naming: native|ros_compatible, config_uri,
-              camera_topic, frame_id, topics: {lowstate, handstate, handcmd, refstate, recording_state},
+              camera_topic, frame_id,
+              topics: {lowstate, handstate, handcmd, refstate, recording_state, motion_feedback},
               buffer_capacity}
 shm:         {shm_name, read_timeout_sec}
 robot_state: {actual: dds|shm|none, reference: dds|none, hand_actual: dds|shm|none,
               hand_command: dds|none, base_pose: shm|none,
               tolerances_ms: {actual: 5, reference: 15, hand_actual: 40, hand_command: 40}}
-signals:     {source: robot|mujoco|isaac|unknown, recording: shm|dds|none}
+signals:     {source: robot|mujoco|isaac|unknown, recording: shm|dds|none, motion_feedback: dds|none}
 ```
 
 Calibration providers: `yaml`/`json` serve a measured file (the real robot);
@@ -319,8 +351,8 @@ optional `cx`/`cy`, k = 0; Isaac Sim via `stream_dds_isaac.yaml`).
 
 Since 2.1 the sender is not started from this repository. `vr-link-stream` is
 a console script that the host repository launches next to its own teleop
-producer, with one namespace/domain for both processes (igris_c_gmr:
-`pixi run launch -- --dds_namespace igris_c_XXXX --target robot|mujoco|isaac|shm`).
+producer, with one namespace/domain for both processes (igris_c_teleop:
+`pixi run teleop -- --dds_namespace igris_c_XXXX --target robot|usb|mujoco|isaac|shm`).
 The host's pixi manifest mirrors the `video` and `calibration` feature
 dependencies below and installs the `igris_c_sdk` wheel from its own pin.
 The configs the launcher selects per target are the packaged
@@ -357,7 +389,10 @@ driver at runtime.
   incompatible downlink changes.
 - Old readers skip unknown fields; new readers get type defaults for fields
   old senders omit. Consumers pin this repo at a commit, so the
-  "schema version" of a build is the submodule pin.
+  "schema version" of a build is the submodule pin. (2.1 appended
+  `VRState.teleop_state` and the four `Signals` motion-feedback fields this
+  way; `Envelope.schema_version` stays 2 and 2.0 senders/receivers still
+  interoperate.)
 - After changing `vr_link.fbs`, run `pixi run generate` and commit the
   schema together with `generated/` in one commit, so pin = schema =
   bindings always agree. Consumers then only bump their submodule pin.

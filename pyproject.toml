@@ -29,7 +29,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vr-link"
-version = "2.0.0"
+version = "2.1.0"
 description = "VR headset link: VRS1 pose uplink, VRL2 downlink (video, calibration, robot state), H.264 encoding, frame/state sources and stereo calibration"
 # The receiver package evaluates tuple[...] type aliases at import time (3.9+).
 requires-python = ">=3.9"

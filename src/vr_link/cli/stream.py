@@ -42,7 +42,7 @@ class DdsRuntime:
     """The process-wide DDS participant plus the robot-state and recording-state subscriptions (all optional)."""
 
     def __init__(self, cfg: PumpConfig) -> None:
-        from vr_link.network.dds import DdsChannel, RecordingStateSubscriber, start_state_subscriptions
+        from vr_link.network.dds import DdsChannel, MotionFeedbackSubscriber, RecordingStateSubscriber, start_state_subscriptions
         from vr_link.utils.time_sync import StampedRingBuffer
 
         self.channel = DdsChannel.create(
@@ -55,17 +55,24 @@ class DdsRuntime:
             hand_actual=StampedRingBuffer(cap, name="hand_actual"), hand_command=StampedRingBuffer(cap, name="hand_command"),
         )
         self.subscriptions = start_state_subscriptions(self.channel, cfg.dds.topics, self.buffers, needed=cfg.robot_state.dds_fields())
-        # Signals.recording from the recorder's recording/state topic (messages.teleop_dds).
+        # Signals.recording from the recorder's recording/state topic, Signals.converging /
+        # arm_hold_* from the teleop producer's teleop/motion_feedback topic (messages.teleop_dds).
         self.recording_state = None
-        if cfg.signals.recording == "dds":
-            try:
+        self.motion_feedback = None
+        try:
+            if cfg.signals.recording == "dds":
                 self.recording_state = RecordingStateSubscriber(self.channel.sdk, cfg.dds.topics.recording_state)
                 self.recording_state.start()
-            except Exception:
-                self.close()
-                raise
+            if cfg.signals.motion_feedback == "dds":
+                self.motion_feedback = MotionFeedbackSubscriber(self.channel.sdk, cfg.dds.topics.motion_feedback)
+                self.motion_feedback.start()
+        except Exception:
+            self.close()
+            raise
 
     def close(self) -> None:
+        if self.motion_feedback is not None:
+            self.motion_feedback.stop()
         if self.recording_state is not None:
             self.recording_state.stop()
         for sub in self.subscriptions:
@@ -201,7 +208,11 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         if provider is not None:
             calibration_server = CalibrationServer(provider, host=cfg.calibration.host, port=cfg.calibration.port, request_timeout=cfg.calibration.request_timeout)
         assembler = RobotStateAssembler(cfg.robot_state, cfg.tolerances, dds.buffers if dds is not None else None)
-        signals = SignalsProvider(cfg.signals, recording_state=dds.recording_state if dds is not None else None)
+        signals = SignalsProvider(
+            cfg.signals,
+            recording_state=dds.recording_state if dds is not None else None,
+            motion_feedback=dds.motion_feedback if dds is not None else None,
+        )
 
         server.start()
         closers.append(server.stop)
@@ -216,6 +227,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             robot_state=(lambda frame: assembler.assemble(frame.capture_ns, frame.robot_block)) if not cfg.robot_state.is_empty() else None,
             signals=lambda frame: signals.sample(frame.robot_block),
             stats_text=assembler.format_stats if cfg.robot_state.dds_fields() else None,
+            # No frames (NO CAMERA target, camera down): keep the headset HUD fed with state-only records.
+            robot_state_now=(lambda wall_ns: assembler.assemble(wall_ns, None)) if cfg.robot_state.dds_fields() else None,
+            signals_now=lambda: signals.sample(None),
         )
         logger.info("Listening on %s:%d (%s source, encoder %s, robot_state %s). Waiting for headset...", cfg.stream.host, server.port, args.source, cfg.encoder.codec, cfg.robot_state)
         pump.run(stop)

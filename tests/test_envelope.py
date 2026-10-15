@@ -76,3 +76,15 @@ def test_record_reader_resyncs_after_garbage_and_bad_length():
     assert reader.pending_bytes == 2  # a possible magic prefix is kept
     out = reader.feed(good[2:])
     assert out == [good[8:]]
+
+
+def test_signals_carry_the_producer_feedback_and_default_idle():
+    full = SignalsSample(True, SourceKind.ROBOT, converging=True, converge_progress=0.5, arm_hold_left=True, arm_hold_right=False)
+    env = parse_envelope(build_signals_payload(full, seq=1, wall_ns=2))
+    decoded = decode_signals(env)
+    assert decoded.converging and decoded.converge_progress == pytest.approx(0.5)
+    assert decoded.arm_hold_left and not decoded.arm_hold_right and decoded.recording and decoded.source is SourceKind.ROBOT
+    idle = decode_signals(parse_envelope(build_signals_payload(SignalsSample(), seq=1, wall_ns=2)))
+    assert idle == SignalsSample()
+    clamped = decode_signals(parse_envelope(build_signals_payload(SignalsSample(converge_progress=7.0), seq=1, wall_ns=2)))
+    assert clamped.converge_progress == 1.0

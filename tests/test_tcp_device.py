@@ -295,3 +295,16 @@ def test_device_passes_adapter_through_advance():
     assert state is not None and state.connected
     assert state.body_joints[0].quat_wxyz == pytest.approx((0.0, 1.0, 0.0, 0.0), abs=1e-6)
     assert state.head.quat_wxyz == pytest.approx((1.0, 0.0, 0.0, 0.0), abs=1e-6)
+
+
+def test_teleop_state_round_trips_and_defaults_to_unknown():
+    assert tcp.decode_vr_state_payload(_vrs1_record()[8:], timestamp=0.0).teleop_state is types.TeleopState.UNKNOWN
+    record = tcp.build_vr_state_record(
+        _joints(), valid_mask=ALL_VALID_MASK, timestamp_ns=1, teleop_state=types.TeleopState.RESUMING
+    )
+    assert tcp.decode_vr_state_payload(record[8:], timestamp=0.0).teleop_state is types.TeleopState.RESUMING
+    # UNKNOWN leaves the field at its default: byte-identical to a pre-2.1 record.
+    assert tcp.build_vr_state_record(_joints(), valid_mask=ALL_VALID_MASK, timestamp_ns=1, teleop_state=types.TeleopState.UNKNOWN) == \
+        tcp.build_vr_state_record(_joints(), valid_mask=ALL_VALID_MASK, timestamp_ns=1)
+    assert types.TeleopState.from_wire(99) is types.TeleopState.UNKNOWN
+    assert [s.value for s in types.TeleopState] == [0, 1, 2, 3, 4, 5]

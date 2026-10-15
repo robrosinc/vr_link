@@ -51,3 +51,4 @@ robot_state:
 signals:
   source: mujoco
   recording: none           # SHM lane only
+  motion_feedback: dds            # igris_c_teleop teleop/motion_feedback -> Signals.converging / arm_hold_* (idle when silent for 1 s)

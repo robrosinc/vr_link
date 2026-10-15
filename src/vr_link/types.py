@@ -8,6 +8,7 @@ changing the consumer.
 
 from __future__ import annotations
 
+import enum
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -74,6 +75,30 @@ class HandTrackingState:
     keypoints: tuple[TrackedPose, ...] = ()
 
 
+class TeleopState(enum.IntEnum):
+    """Headset teleop control state (``VRState.teleop_state``, wire values).
+
+    Mirrors vr_system ``ETeleopControlState`` plus ``UNKNOWN`` (0), the value
+    senders older than the field produce. State, not an event: receivers
+    detect transitions themselves (e.g. ``RESUMING`` starts the robot-side
+    convergence ramp in igris_c_teleop).
+    """
+
+    UNKNOWN = 0
+    STOPPED = 1
+    COUNTDOWN = 2
+    RESUMING = 3
+    ACTIVE = 4
+    PAUSED = 5
+
+    @classmethod
+    def from_wire(cls, value: int) -> "TeleopState":
+        try:
+            return cls(int(value))
+        except ValueError:
+            return cls.UNKNOWN
+
+
 @dataclass(frozen=True)
 class ControllerInput:
     trigger: float = 0.0
@@ -120,6 +145,11 @@ class VRInputState:
     # hand is merely not tracked this frame.
     left_hand: HandTrackingState | None = None
     right_hand: HandTrackingState | None = None
+
+    # Headset teleop control state at the time of the record (VRS1
+    # teleop_state). UNKNOWN from senders older than the field; always live,
+    # even on the frozen snapshots re-sent while Paused/Countdown.
+    teleop_state: TeleopState = TeleopState.UNKNOWN
 
 
 class VRDevice(ABC):

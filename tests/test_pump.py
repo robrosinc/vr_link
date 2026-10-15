@@ -157,3 +157,40 @@ def test_pump_drops_frames_while_no_client(sw_available):
     assert pump.frames_dropped_no_client == 3
     assert pump.frames_sent == 0
     assert pump.encoder is None
+
+
+def test_pump_sends_a_state_heartbeat_while_the_source_has_no_frames():
+    source = FakeSource(count=0)
+    server = EnvelopeTcpServer(host="127.0.0.1", port=0, send_calibration=False)
+    server.start()
+    stop = threading.Event()
+    ticks = []
+
+    def signals_now():
+        ticks.append(1)
+        return SignalsSample(source=SourceKind.ROBOT, converging=True, converge_progress=0.3)
+
+    pump = StreamPump(source, server, encoder_cfg=_encoder_cfg(), read_timeout=1.0,
+                      robot_state_now=lambda wall_ns: RobotStateSample(body_actual=vector(np.zeros(31, dtype=np.float32), wall_ns)),
+                      signals_now=signals_now, state_heartbeat_hz=50.0)
+    assert pump.read_timeout == pytest.approx(0.02)  # capped to the heartbeat period
+    thread = threading.Thread(target=pump.run, args=(stop,), daemon=True)
+    try:
+        with socket.create_connection(("127.0.0.1", server.port), timeout=5.0) as conn:
+            conn.settimeout(5.0)
+            client = EnvelopeClient(conn)
+            thread.start()
+            sig_env, state_env = client.next(), client.next()
+            assert (sig_env.kind, state_env.kind) == (MessageKind.SIGNALS, MessageKind.ROBOT_STATE)
+            assert sig_env.seq + 1 == state_env.seq and sig_env.wall_ns == state_env.wall_ns and sig_env.sim_ns == 0
+            sig = decode_signals(sig_env)
+            assert sig.converging and sig.converge_progress == pytest.approx(0.3) and sig.source is SourceKind.ROBOT
+            assert decode_robot_state(state_env).body_actual is not None
+            t0 = time.monotonic()
+            client.next(); client.next()  # a second heartbeat arrives on its own
+            assert time.monotonic() - t0 < 2.0
+    finally:
+        stop.set()
+        thread.join(timeout=5.0)
+        server.stop()
+    assert pump.heartbeats_sent >= 2 and pump.frames_sent == 0 and pump.encoder is None

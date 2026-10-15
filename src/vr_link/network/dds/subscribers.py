@@ -143,6 +143,7 @@ class DdsStateTopics:
     handcmd: str = "handcmd"
     refstate: str = "gmr/refstate"
     recording_state: str = "recording/state"  # teleop signal (messages.teleop_dds), read for Signals.recording
+    motion_feedback: str = "teleop/motion_feedback"  # teleop producer feedback (messages.teleop_dds), read for Signals.converging / arm_hold_*
 
 
 # field name -> (message type, topic attribute, extractor factory)

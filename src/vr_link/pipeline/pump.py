@@ -11,6 +11,12 @@ honour a keyframe request from a fresh connection, optionally pace to
 ``max_fps``, encode, and queue the access unit with the frame's acquisition
 time and simulation time (0 for real cameras).
 
+While the source delivers no frames (NO CAMERA targets, camera down) and a
+headset is connected, a state-only heartbeat (``Signals`` and, when a
+``robot_state_now`` provider is given, ``RobotState``) goes out at
+``state_heartbeat_hz`` so the HUD keeps showing the producer feedback and the
+robot state. The source read timeout is capped to the heartbeat period.
+
 The encoder is created from the first frame's size (producers such as the
 MuJoCo segment fix the size at runtime) and recreated if the size changes.
 When a calibration provider is given, its value is handed to the server as
@@ -43,6 +49,10 @@ FPS_REPORT_INTERVAL_SEC = 2.0
 EncoderFactory = Callable[[int, int], H264Encoder]
 RobotStateProvider = Callable[[Frame], Optional[RobotStateSample]]
 SignalsProvider = Callable[[Frame], Optional[SignalsSample]]
+# Frame-less providers for the state heartbeat: robot state at a wall time, signals now.
+RobotStateNowProvider = Callable[[int], Optional[RobotStateSample]]
+SignalsNowProvider = Callable[[], Optional[SignalsSample]]
+DEFAULT_STATE_HEARTBEAT_HZ = 10.0
 
 
 class StreamPump:
@@ -62,6 +72,9 @@ class StreamPump:
         robot_state: Optional[RobotStateProvider] = None,
         signals: Optional[SignalsProvider] = None,
         stats_text: Optional[Callable[[], str]] = None,
+        robot_state_now: Optional[RobotStateNowProvider] = None,
+        signals_now: Optional[SignalsNowProvider] = None,
+        state_heartbeat_hz: float = DEFAULT_STATE_HEARTBEAT_HZ,
     ) -> None:
         self.source = source
         self.server = server
@@ -79,8 +92,36 @@ class StreamPump:
         self.frames_dropped_no_client = 0
         self._params_published = False
         self._last_sent_ns: Optional[int] = None
+        # State heartbeat (no frames): providers and pacing.
+        self.robot_state_now = robot_state_now
+        self.signals_now = signals_now
+        self.state_heartbeat_hz = float(state_heartbeat_hz)
+        self.heartbeats_sent = 0
+        self._last_heartbeat_monotonic: Optional[float] = None
+        if self._heartbeat_enabled():
+            self.read_timeout = min(self.read_timeout, 1.0 / self.state_heartbeat_hz)
 
     # -- helpers -------------------------------------------------------------------
+
+    def _heartbeat_enabled(self) -> bool:
+        return self.state_heartbeat_hz > 0.0 and (self.signals_now is not None or self.robot_state_now is not None)
+
+    def _maybe_send_state_heartbeat(self) -> None:
+        """Send Signals/RobotState without a frame, at most once per heartbeat period."""
+
+        if not self._heartbeat_enabled() or not self.server.client_connected:
+            return
+        now = time.monotonic()
+        if self._last_heartbeat_monotonic is not None and now - self._last_heartbeat_monotonic < 1.0 / self.state_heartbeat_hz:
+            return
+        self._last_heartbeat_monotonic = now
+        wall_ns = time.time_ns()
+        state = self.robot_state_now(wall_ns) if self.robot_state_now is not None else None
+        sig = self.signals_now() if self.signals_now is not None else None
+        if state is None and sig is None:
+            return
+        self.server.send_state(wall_ns=wall_ns, sim_ns=0, robot_state=state, signals=sig)
+        self.heartbeats_sent += 1
 
     def _default_encoder(self, width: int, height: int) -> H264Encoder:
         cfg = self.encoder_cfg
@@ -129,6 +170,7 @@ class StreamPump:
                     if now - last_idle_warn >= IDLE_WARN_INTERVAL_SEC:
                         logger.warning("No frames from the source; still waiting...")
                         last_idle_warn = now
+                    self._maybe_send_state_heartbeat()
                     continue
                 last_idle_warn = time.monotonic()
 
