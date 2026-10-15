@@ -3,15 +3,15 @@ import pytest
 
 from vr_link.calibration import ideal, schema, yaml_io
 from vr_link.cli.make_calibration import render_ideal_yaml
-from vr_link.pipeline.config import local_path
+from vr_link.pipeline.config import data_path
 
 pytest.importorskip("yaml")
 
 
-# Measured/generated calibration files are machine-local data (local/, git-ignored);
+# Measured/generated calibration files are machine-local data (data/, git-ignored);
 # the tests that read them skip when this machine does not have them.
 def _local_data(name: str):
-    path = local_path(f"calibration/{name}")
+    path = data_path(f"calibration/{name}")
     if not path.is_file():
         pytest.skip(f"local calibration data {name} not present in this checkout")
     return path

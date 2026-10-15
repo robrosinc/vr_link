@@ -39,7 +39,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p.add_argument("--rate", type=float, default=5.0, metavar="HZ", help="status line updates per second (default 5)")
     p.add_argument("--smooth", type=int, default=5, metavar="N", help="average the last N frames so the figure does not jitter (default 5)")
     p.add_argument("--save-every", type=float, default=0.0, metavar="SEC", help="also save a lossless SBS snapshot every SEC seconds (default: never)")
-    p.add_argument("--output-dir", type=Path, default=None, help="root of the timestamped snapshot folders (default local:captures)")
+    p.add_argument("--output-dir", type=Path, default=None, help="root of the timestamped snapshot folders (default data:captures)")
     return p.parse_args(argv)
 
 

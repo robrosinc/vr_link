@@ -78,7 +78,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Stereo checkerboard capture (USB camera or DDS topic)")
     p.add_argument("--config", default=None, metavar="PATH", help="calibration_tools.yaml (default: packaged)")
     p.add_argument("--source", choices=("usb", "dds"), default="usb")
-    p.add_argument("--output-dir", type=Path, default=None, help="root of the timestamped capture folders (default local:captures, i.e. <checkout>/local/captures)")
+    p.add_argument("--output-dir", type=Path, default=None, help="root of the timestamped capture folders (default data:captures, i.e. <checkout>/data/captures)")
     p.add_argument("--domain-id", type=int, default=None, help="dds: override dds.domain_id")
     p.add_argument("--namespace", default=None, help="dds: override dds.namespace")
     p.add_argument("--topic", default=None, help="dds: override dds.camera_topic")

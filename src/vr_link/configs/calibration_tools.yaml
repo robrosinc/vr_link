@@ -1,8 +1,8 @@
 # Checkerboard capture and stereo calibration of the eyes_stereo camera.
-#   vr-link-capture-checkerboard [--config this-file] [--source usb|dds]     -> local/captures/<ts>/
+#   vr-link-capture-checkerboard [--config this-file] [--source usb|dds]     -> data/captures/<ts>/
 #   vr-link-calibrate-cams       [--config this-file] [--serve-as igris_c_eyes_stereo_unreal.yaml]
-#                                  (newest capture folder) -> local/calibration/<ts>/ [+ the served file]
-# "local" is <checkout>/local (git-ignored) or $VR_LINK_LOCAL_DIR.
+#                                  (newest capture folder) -> data/calibration/<ts>/ [+ the served file]
+# "data" is <checkout>/data (git-ignored) or $VR_LINK_DATA_DIR.
 
 camera:
   index: "/dev/eyes_stereo"
@@ -10,7 +10,7 @@ camera:
   # Capture in the mode that will be streamed: each mode is a different sensor
   # crop, so its calibration (and field of view) is only valid for that mode.
   # 1280x480 SBS = 640x480 per eye (4:3), the target mode shared with the
-  # simulators. The served calibration (local/calibration/
+  # simulators. The served calibration (data/calibration/
   # igris_c_eyes_stereo_unreal.yaml) must be measured in the same mode.
   width: 1280
   height: 480
@@ -47,7 +47,8 @@ calibration:
   fisheye_check_cond: false
   min_valid_pairs: 10
 
-# vr-link-capture-checkerboard --source dds only (igris_c_sdk required).
+# vr-link-capture-checkerboard --source dds only (igris_c_sdk binding required: run from
+# the host env that installed the wheel, e.g. igris_c_gmr, or set IGRIS_C_SDK_ROOT).
 dds:
   domain_id: 0              # robot.yaml igris_c.network.cyclonedds.domain_id (or --domain-id)
   namespace: ""             # REQUIRED for dds: the robot's namespace (e.g. igris_c_XXXX)

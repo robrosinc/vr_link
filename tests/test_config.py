@@ -20,7 +20,7 @@ def test_packaged_defaults_load(kind):
         assert cfg.robot_state.dds_fields() == {"reference", "hand_command"} and cfg.needs_dds()
     else:
         assert cfg.calibration.provider == "yaml" and cfg.encoder.codec == "libx264"
-        assert cfg.calibration.yaml_path == config.local_path("calibration/igris_c_eyes_stereo_unreal.yaml")
+        assert cfg.calibration.yaml_path == config.data_path("calibration/igris_c_eyes_stereo_unreal.yaml")
         assert cfg.signals.source is SourceKind.ROBOT and cfg.needs_dds()
         assert cfg.tolerances.actual_ms == 5.0 and cfg.tolerances.reference_ms == 15.0
     assert cfg.dds.domain_id == 0
@@ -118,11 +118,13 @@ def test_config_path_precedence(monkeypatch, tmp_path):
     assert config.resolve_config_path(tmp_path / "cli.yaml", "usb") == tmp_path / "cli.yaml"
 
 
-def test_path_prefixes_and_local_root(monkeypatch, tmp_path):
-    monkeypatch.delenv(config.LOCAL_DIR_ENV, raising=False)
-    assert config.local_root().name == "local" and (config.local_root().parent / "pyproject.toml").is_file()
+def test_path_prefixes_and_data_root(monkeypatch, tmp_path):
+    monkeypatch.delenv(config.DATA_DIR_ENV, raising=False)
+    assert config.data_root().name == "data" and (config.data_root().parent / "pyproject.toml").is_file()
     assert config.resolve_data_path("pkg:configs/stream_usb.yaml") == config.default_config_path("usb")
-    assert config.resolve_data_path("data:configs/stream_usb.yaml") == config.default_config_path("usb")  # 1.x spelling
-    assert config.resolve_data_path("local:calibration/x.yaml") == config.local_root() / "calibration/x.yaml"
-    monkeypatch.setenv(config.LOCAL_DIR_ENV, str(tmp_path / "vrl"))
-    assert config.resolve_data_path("local:captures") == tmp_path / "vrl" / "captures"
+    assert config.resolve_data_path("data:calibration/x.yaml") == config.data_root() / "calibration/x.yaml"
+    # The 1.x "data:" alias of "pkg:" is gone: "data:" is the machine-local root now.
+    assert config.resolve_data_path("data:configs/stream_usb.yaml") == config.data_root() / "configs/stream_usb.yaml"
+    assert not hasattr(config, "LOCAL_PREFIX") and not hasattr(config, "local_root")
+    monkeypatch.setenv(config.DATA_DIR_ENV, str(tmp_path / "vrl"))
+    assert config.resolve_data_path("data:captures") == tmp_path / "vrl" / "captures"

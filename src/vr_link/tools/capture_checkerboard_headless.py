@@ -38,7 +38,7 @@ SOURCE_NAME = "usb-headless"
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Headless stereo checkerboard capture (USB camera, no window; for SSH use)")
     p.add_argument("--config", default=None, metavar="PATH", help="calibration_tools.yaml (default: packaged)")
-    p.add_argument("--output-dir", type=Path, default=None, help="root of the timestamped capture folders (default local:captures)")
+    p.add_argument("--output-dir", type=Path, default=None, help="root of the timestamped capture folders (default data:captures)")
     p.add_argument("--target-count", type=int, default=None, help="override capture.target_count")
     p.add_argument("--interval", type=float, default=None, metavar="SEC", help="override capture.auto_interval_sec (min gap between saves)")
     p.add_argument(

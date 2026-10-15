@@ -7,21 +7,21 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Tuple
 
-from vr_link.pipeline.config import PathLike, local_path, packaged_path
+from vr_link.pipeline.config import PathLike, data_path, packaged_path
 
 DEFAULT_TOOLS_CONFIG = "configs/calibration_tools.yaml"
 
 
 def default_captures_root() -> Path:
-    """``local:captures``: where vr-link-capture-checkerboard writes its timestamped folders."""
+    """``data:captures``: where vr-link-capture-checkerboard writes its timestamped folders."""
 
-    return local_path("captures")
+    return data_path("captures")
 
 
 def default_calibration_root() -> Path:
-    """``local:calibration``: calibrate-cams outputs and the served calibration files."""
+    """``data:calibration``: calibrate-cams outputs and the served calibration files."""
 
-    return local_path("calibration")
+    return data_path("calibration")
 
 
 def load_tools_config(path: Optional[PathLike]) -> Tuple[Dict[str, Any], Path]:

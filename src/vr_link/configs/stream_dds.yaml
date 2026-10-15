@@ -1,6 +1,7 @@
 # VRL2 downlink fed by the robot's eyes_stereo DDS topic (JPEG) + the robot's DDS state.
 #   vr-link-stream --source dds [--config this-file] [--dds-namespace igris_c_XXXX] [--dds-domain N]
-# Needs the igris_c_sdk Python binding (pixi run install-sdk, or IGRIS_C_SDK_ROOT).
+# Needs the igris_c_sdk Python binding from the host repository's env (igris_c_gmr
+# `pixi run install-sdk`, or IGRIS_C_SDK_ROOT); vr_link itself ships no SDK.
 # Matches igris_c_camera (direct mode, camera on the NUC, igris_c_camera >= 2026-09-10):
 # CompressedImage_ on <ns>/sensor/eyes_stereo/compressed, frame_id "stereo_image",
 # header.stamp = acquisition time. dds.domain_id, namespace and topic_naming must equal
@@ -23,7 +24,7 @@ calibration:
   host: "0.0.0.0"
   port: 9101
   provider: yaml
-  yaml: "local:calibration/igris_c_eyes_stereo_unreal.yaml"   # vr-link-calibrate-cams ... --serve-as igris_c_eyes_stereo_unreal.yaml
+  yaml: "data:calibration/igris_c_eyes_stereo_unreal.yaml"   # vr-link-calibrate-cams ... --serve-as igris_c_eyes_stereo_unreal.yaml
 
 dds:
   domain_id: 0              # robot.yaml igris_c.network.cyclonedds.domain_id (or --dds-domain)

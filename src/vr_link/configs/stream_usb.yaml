@@ -2,8 +2,8 @@
 #   vr-link-stream --source usb [--config this-file] [--dds-namespace igris_c_XXXX]
 # Same schema for every source; only the capture keys and the robot_state
 # sources differ. Relative paths resolve against this file's directory;
-# "pkg:" addresses the vr_link package, "local:" the git-ignored local data root
-# (<checkout>/local, or $VR_LINK_LOCAL_DIR).
+# "pkg:" addresses the vr_link package, "data:" the git-ignored machine-local
+# data root (<checkout>/data, or $VR_LINK_DATA_DIR).
 
 eyes_stereo:
   cam_index: "/dev/eyes_stereo"
@@ -28,9 +28,10 @@ calibration:
   host: "0.0.0.0"
   port: 9101
   provider: yaml            # the real camera serves its measured calibration
-  yaml: "local:calibration/igris_c_eyes_stereo_unreal.yaml"   # vr-link-calibrate-cams ... --serve-as igris_c_eyes_stereo_unreal.yaml
+  yaml: "data:calibration/igris_c_eyes_stereo_unreal.yaml"   # vr-link-calibrate-cams ... --serve-as igris_c_eyes_stereo_unreal.yaml
 
-# Robot state matched to each frame by timestamp (igris_c_sdk wheel required).
+# Robot state matched to each frame by timestamp (igris_c_sdk binding required:
+# the host repository's wheel, e.g. igris_c_gmr `pixi run install-sdk`).
 dds:
   domain_id: 0              # robot.yaml igris_c.network.cyclonedds.domain_id (or --dds-domain)
   namespace: ""             # REQUIRED: the robot's namespace (or --dds-namespace)

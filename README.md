@@ -202,7 +202,7 @@ optional extra and is imported lazily by the module that needs it:
 | `video` | PyAV | `vr_link.video.encoder`, `vr_link.pipeline`, `vr-link-stream` |
 | `yaml` | pyyaml | calibration YAML files, stream configs |
 | `calibration` | OpenCV, pyyaml | `vr-link-capture-checkerboard`, `vr-link-calibrate-cams`, the DDS camera source (JPEG decode) |
-| `dds` | (marker only) | `vr_link.network.dds` and `vr_link.sources.dds_camera` need the `igris_c_sdk` Python binding: a py3.12 wheel a human builds from the `thirdparty/igris_c_sdk` submodule (`task wheel`) and installs with `pixi run install-sdk` (or `IGRIS_C_SDK_ROOT`). |
+| `dds` | (marker only) | `vr_link.network.dds` and `vr_link.sources.dds_camera` need the `igris_c_sdk` Python binding, a py3.12 wheel that is not on PyPI. Since 2.1 vr_link vendors no SDK: the host repository that runs vr_link (igris_c_gmr, hit-tasks) builds the wheel from its own `igris_c_sdk` submodule pin and installs it into the shared env, or `IGRIS_C_SDK_ROOT` points at a checkout. |
 
 Consumers install editable from their submodule checkout (`pip install -e
 <path>[video]`, or a uv/pixi path source) and re-run that install after
@@ -255,13 +255,16 @@ Layout:
   capture / stereo calibration tools.
 - `vr_link.configs` — the packaged configuration files (`stream_*.yaml`,
   `calibration_tools.yaml`; tracked, shipped in the wheel).
-- `local/` (repository root, **git-ignored**) — machine-local data, never
-  packaged: `captures/<yymmdd_HHMMSS>/` from `vr-link-capture-checkerboard`,
-  `calibration/<capture>/` from `vr-link-calibrate-cams`, and the served
-  measured calibration `calibration/igris_c_eyes_stereo_unreal.yaml`
+- `data/` (repository root, **git-ignored**; `local/` before 2.1) —
+  machine-local data, never packaged: `captures/<yymmdd_HHMMSS>/` from
+  `vr-link-capture-checkerboard`, `calibration/<capture>/` from
+  `vr-link-calibrate-cams`, and the served measured calibration
+  `calibration/igris_c_eyes_stereo_unreal.yaml`
   (`vr-link-calibrate-cams --serve-as igris_c_eyes_stereo_unreal.yaml` copies it
-  there). The root is `$VR_LINK_LOCAL_DIR`, else `<checkout>/local`, else
-  `~/.vr_link` for a wheel install (`vr_link.pipeline.config.local_root`). A
+  there). The root is `$VR_LINK_DATA_DIR`, else `<checkout>/data`, else
+  `~/.vr_link` for a wheel install (`vr_link.pipeline.config.data_root`). The
+  checkout is found by walking up to `pyproject.toml`, so inside a host
+  repository the root is that repository's `thirdparty/vr_link/data/`. A
   fresh checkout has no served calibration: the 9101 server answers "not
   ready" until one exists. Tests that read these files skip when absent.
 
@@ -286,7 +289,7 @@ vr-link-stream --source shm   [--config stream_shm.yaml]                        
 Config schema (`src/vr_link/configs/*.yaml`; `--config` >
 `$VR_LINK_STREAM_CONFIG` > packaged default). Paths in a file resolve against
 the file's directory; `pkg:` addresses the package (`pkg:configs/...`) and
-`local:` the local data root (`local:calibration/...`):
+`data:` the machine-local data root (`data:calibration/...`):
 
 ```yaml
 eyes_stereo: {cam_index, resolution: [1280, 480], fps, enable_stereo, apply_tuning}
@@ -312,23 +315,30 @@ projection the simulator renders: `pinhole` (default; `fovy_deg` -> fx with
 the tan-series k, MuJoCo) or `fisheye_equidistant` (`focal_px` in px/rad,
 optional `cx`/`cy`, k = 0; Isaac Sim via `stream_dds_isaac.yaml`).
 
-### Standalone use (pixi)
+### Launching the sender
+
+Since 2.1 the sender is not started from this repository. `vr-link-stream` is
+a console script that the host repository launches next to its own teleop
+producer, with one namespace/domain for both processes (igris_c_gmr:
+`pixi run launch -- --dds_namespace igris_c_XXXX --target robot|mujoco|isaac|shm`).
+The host's pixi manifest mirrors the `video` and `calibration` feature
+dependencies below and installs the `igris_c_sdk` wheel from its own pin.
+The configs the launcher selects per target are the packaged
+`stream_dds.yaml`, `stream_dds_mujoco.yaml`, `stream_dds_isaac.yaml` and
+`stream_shm.yaml`.
+
+### This repository's own pixi env (tests, codegen, calibration tools)
 
 ```bash
-pixi install                        # default env: video + calibration + test
+pixi install                        # default env: video + calibration + test (no igris_c_sdk)
 pixi run test                       # pytest (loopback and temp-file tests, no hardware)
-scripts/setup_sdk.sh                # fresh clone: submodules + `task wheel` + install-sdk (plain shell, ROS 2 sourced)
-pixi run install-sdk                # igris_c_sdk wheel from thirdparty/igris_c_sdk/dist (human-built)
-pixi run shm-tcp-stream             # vr-link-stream --source shm
-pixi run camera-tcp-stream -- --dds-namespace igris_c_XXXX
-pixi run dds-tcp-stream -- --dds-namespace igris_c_XXXX [--dds-domain N]   # igris_c_camera on <ns>/sensor/eyes_stereo/compressed
-pixi run dds-tcp-stream-mujoco -- --dds-namespace igris_c_XXXX [--dds-domain N]   # igris_c_mujoco vision_dds_sink on the same topic
-pixi run capture-checkerboard          # -> local/captures/<ts>/
+pixi run generate                   # regenerate the FlatBuffers bindings (pinned flatc)
+pixi run capture-checkerboard          # -> data/captures/<ts>/  (USB source; --source dds needs the SDK from a host env or IGRIS_C_SDK_ROOT)
 pixi run capture-checkerboard-headless # same output, no window: robot NUC over SSH (stop igris-c-camera.service first), then scp the folder
 pixi run focus-check                   # live per-eye sharpness (Laplacian variance) in the terminal: turn a lens ring until L and R agree
-pixi run calibrate-cams -- --serve-as igris_c_eyes_stereo_unreal.yaml   # newest capture -> local/calibration/<ts>/ + served file
-pixi run calibrate-cams -- --input-dir local/captures/<ts> --serve-as igris_c_eyes_stereo_unreal.yaml   # a folder copied from the NUC
-pixi run make-mujoco-calibration       # -> local/calibration/mujoco_stereo_calibration.yaml (reference only; the shm stream computes its own)
+pixi run calibrate-cams -- --serve-as igris_c_eyes_stereo_unreal.yaml   # newest capture -> data/calibration/<ts>/ + served file
+pixi run calibrate-cams -- --input-dir data/captures/<ts> --serve-as igris_c_eyes_stereo_unreal.yaml   # a folder copied from the NUC
+pixi run make-mujoco-calibration       # -> data/calibration/mujoco_stereo_calibration.yaml (reference only; the shm stream computes its own)
 ```
 
 The conda-forge ffmpeg behind PyAV in this environment provides libx264,

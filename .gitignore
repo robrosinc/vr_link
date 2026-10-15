@@ -55,6 +55,6 @@ __pycache__/
 .pytest_cache/
 .pixi/
 
-# Machine-local data root (vr_link.pipeline.config.local_root): checkerboard
+# Machine-local data root (vr_link.pipeline.config.data_root): checkerboard
 # captures, calibration outputs and the served measured calibration files.
-local/
+data/

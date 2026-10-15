@@ -5,9 +5,11 @@ gmr/refstate, the camera image topic). :mod:`.teleop` adds the teleop signal
 topics (``vr/controller``, ``recording/state``) as ``Joy_`` publishers and
 subscribers that any process holding an SDK participant can host. Robot
 control topics (lowcmd, handcmd, services) are never written here. The SDK
-Python binding is not on PyPI: it is a wheel a human builds from the
-``thirdparty/igris_c_sdk`` submodule (``task wheel``) and installs with
-``pixi run install-sdk``. Nothing in this package imports it at module load.
+Python binding is not on PyPI and vr_link does not vendor it (2.1): the host
+repository that runs vr_link (igris_c_gmr, hit-tasks) builds the wheel from
+its own ``igris_c_sdk`` submodule pin and installs it into the shared env, or
+``IGRIS_C_SDK_ROOT`` points at a checkout. Nothing in this package imports it
+at module load.
 """
 
 from __future__ import annotations
@@ -17,8 +19,9 @@ import sys
 from pathlib import Path
 
 WHEEL_HINT = (
-    "Build the igris_c_sdk Python 3.12 wheel (task wheel in thirdparty/igris_c_sdk) and install it with "
-    "`pixi run install-sdk`, or point IGRIS_C_SDK_ROOT at a checkout that contains igris_c_sdk/__init__.py."
+    "Install the igris_c_sdk Python 3.12 wheel into this env from the host repository's igris_c_sdk submodule "
+    "(e.g. igris_c_gmr: `task wheel` there, then `pixi run install-sdk`), or point IGRIS_C_SDK_ROOT at a checkout "
+    "that contains igris_c_sdk/__init__.py."
 )
 
 

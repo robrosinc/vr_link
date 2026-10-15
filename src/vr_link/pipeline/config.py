@@ -18,11 +18,12 @@ and adds the robot-state sources::
 
 Paths inside a file resolve against the file's own directory. Two prefixes
 address well-known roots instead: ``pkg:`` is this package
-(``pkg:configs/stream_usb.yaml``, shipped in the wheel) and ``local:`` is the
-machine-local, git-ignored data root (``local:calibration/x.yaml``: measured
-calibrations, checkerboard captures, calibration outputs). The local root is
-``$VR_LINK_LOCAL_DIR``, else ``<checkout>/local`` when the package runs from a
-source checkout (editable install), else ``~/.vr_link``.
+(``pkg:configs/stream_usb.yaml``, shipped in the wheel) and ``data:`` is the
+machine-local, git-ignored data root (``data:calibration/x.yaml``: measured
+calibrations, checkerboard captures, calibration outputs). The data root is
+``$VR_LINK_DATA_DIR``, else ``<checkout>/data`` when the package runs from a
+source checkout (editable install, including a submodule checkout of a host
+repository), else ``~/.vr_link``.
 The location of the config file itself: ``--config`` > ``$VR_LINK_STREAM_CONFIG``
 > the packaged default for the source kind.
 """
@@ -43,10 +44,11 @@ from .robot_state import MatchTolerances, RobotStateSpec, SignalsSpec
 PathLike = Union[str, Path]
 
 CONFIG_PATH_ENV = "VR_LINK_STREAM_CONFIG"
-LOCAL_DIR_ENV = "VR_LINK_LOCAL_DIR"
+DATA_DIR_ENV = "VR_LINK_DATA_DIR"
 PKG_PREFIX = "pkg:"
-LOCAL_PREFIX = "local:"
-DATA_PREFIX = "data:"  # 1.x spelling of pkg:; still accepted
+# Machine-local data root (2.1: renamed from "local:"; the 1.x "data:" alias of
+# "pkg:" is gone, no consumer used it).
+DATA_PREFIX = "data:"
 SOURCE_KINDS = ("usb", "dds", "shm")
 CALIBRATION_PROVIDERS = ("yaml", "json", "ideal_from_source", "ideal_from_config")
 # "pinhole": the simulator renders a pinhole; serve fx from fovy with the tan-series k.
@@ -69,42 +71,36 @@ def packaged_path(relative: str) -> Path:
     return Path(str(resources.files("vr_link") / relative))
 
 
-def packaged_data_path(relative: str) -> Path:
-    """1.x name: ``configs/...`` used to live under ``vr_link/data``; now under the package root."""
-
-    return packaged_path(relative)
-
-
-def local_root() -> Path:
-    """Root of machine-local data: ``$VR_LINK_LOCAL_DIR`` > ``<checkout>/local`` > ``~/.vr_link``.
+def data_root() -> Path:
+    """Root of machine-local data: ``$VR_LINK_DATA_DIR`` > ``<checkout>/data`` > ``~/.vr_link``.
 
     The checkout is detected by walking up from the package directory to a
-    ``pyproject.toml`` (an editable install); a wheel install has none.
+    ``pyproject.toml`` (an editable install, which is also how host repositories
+    install their vr_link submodule); a wheel install has none.
     """
 
-    env = os.environ.get(LOCAL_DIR_ENV)
+    env = os.environ.get(DATA_DIR_ENV)
     if env:
         return Path(env).expanduser()
     package_dir = Path(__file__).resolve().parents[1]  # src/vr_link
     for parent in package_dir.parents:
         if (parent / "pyproject.toml").is_file():
-            return parent / "local"
+            return parent / "data"
     return Path.home() / ".vr_link"
 
 
-def local_path(relative: str = "") -> Path:
-    return local_root() / relative if relative else local_root()
+def data_path(relative: str = "") -> Path:
+    return data_root() / relative if relative else data_root()
 
 
 def resolve_data_path(value: PathLike, *, base_dir: Optional[Path] = None) -> Path:
-    """``pkg:``/``local:`` prefixes -> their roots; absolute as-is; relative -> ``base_dir``."""
+    """``pkg:``/``data:`` prefixes -> their roots; absolute as-is; relative -> ``base_dir``."""
 
     text = str(value)
-    for prefix in (PKG_PREFIX, DATA_PREFIX):
-        if text.startswith(prefix):
-            return packaged_path(text[len(prefix):])
-    if text.startswith(LOCAL_PREFIX):
-        return local_path(text[len(LOCAL_PREFIX):])
+    if text.startswith(PKG_PREFIX):
+        return packaged_path(text[len(PKG_PREFIX):])
+    if text.startswith(DATA_PREFIX):
+        return data_path(text[len(DATA_PREFIX):])
     path = Path(text).expanduser()
     if path.is_absolute() or base_dir is None:
         return path
@@ -400,8 +396,7 @@ def load_pump_config(path: PathLike, source_kind: str) -> PumpConfig:
 __all__ = [
     "CALIBRATION_PROVIDERS",
     "CONFIG_PATH_ENV",
-    "LOCAL_DIR_ENV",
-    "LOCAL_PREFIX",
+    "DATA_DIR_ENV",
     "PKG_PREFIX",
     "CalibrationServerConfig",
     "ConfigError",
@@ -414,13 +409,12 @@ __all__ = [
     "StreamConfig",
     "UsbSourceConfig",
     "build_pump_config",
+    "data_path",
+    "data_root",
     "default_config_path",
     "load_config_file",
     "load_pump_config",
-    "local_path",
-    "local_root",
     "normalize_source_kind",
-    "packaged_data_path",
     "packaged_path",
     "resolve_config_path",
     "resolve_data_path",

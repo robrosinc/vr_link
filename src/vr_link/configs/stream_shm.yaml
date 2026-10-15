@@ -36,7 +36,8 @@ shm:
   read_timeout_sec: 1.0     # wait for a new frame before re-checking the segment
 
 # The operator's reference joints and hand command come from the igris_c_gmr
-# producer over DDS (igris_c_sdk wheel: `pixi run install-sdk`). Without them
+# producer over DDS (igris_c_sdk wheel from the host env, e.g. igris_c_gmr
+# `pixi run install-sdk`). Without them
 # the headset's hand-target overlay stays hidden (it needs body_reference).
 # Set reference/hand_command to none to run without the SDK.
 dds:

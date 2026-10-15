@@ -9,17 +9,20 @@
 # not the nominal version below.
 #
 # Optional extras keep `import vr_link` dependency-light (flatbuffers + numpy):
-#   video        H.264 encoding + the standalone stream pump (PyAV)
+#   video        H.264 encoding + the stream pump (PyAV)
 #   yaml         YAML calibration files / stream configs
 #   calibration  checkerboard capture + stereo calibration tools (OpenCV)
 #   dds          marker only: the DDS camera source and robot-state subscribers
-#                need the igris_c_sdk Python binding (py3.12 wheel built from
-#                the thirdparty/igris_c_sdk submodule, not pip-installable):
-#                `pixi run install-sdk` or set IGRIS_C_SDK_ROOT.
+#                need the igris_c_sdk Python binding (py3.12 wheel, not
+#                pip-installable). Since 2.1 vr_link vendors no SDK: the host
+#                repository that runs the stream (igris_c_gmr) builds the wheel
+#                from its own igris_c_sdk pin and installs it into the shared
+#                env, or IGRIS_C_SDK_ROOT points at a checkout.
 #   dev          pytest
 #
-# Standalone use (senders, calibration tools) is pixi-managed: `pixi run
-# shm-tcp-stream`, `pixi run test`, see [tool.pixi.*] below.
+# The stream sender (`vr-link-stream`) is a console script launched by the host
+# repository (igris_c_gmr launcher); this repo's own pixi env covers the tests,
+# code generation and the calibration tools only.
 [build-system]
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
@@ -72,7 +75,7 @@ packages = [
 
 [tool.setuptools.package-data]
 # Only the configs ship; measured calibrations and captures are machine-local
-# (local/, git-ignored) and never enter the wheel.
+# (data/, git-ignored) and never enter the wheel.
 "vr_link.configs" = ["*.yaml"]
 
 [tool.pytest.ini_options]
@@ -85,7 +88,6 @@ platforms = ["linux-64"]
 
 [tool.pixi.dependencies]
 python = "3.12.*"
-pip = "*"                 # install-sdk installs the human-built igris_c_sdk wheel with pip
 flatbuffers = ">=24,<26"
 numpy = ">=2.0,<3"
 
@@ -93,7 +95,9 @@ numpy = ">=2.0,<3"
 vr-link = { path = ".", editable = true }
 
 # conda-forge ffmpeg (gpl build) behind PyAV carries libx264, h264_nvenc,
-# h264_vaapi and h264_qsv; hardware encoders still need the host driver.
+# h264_vaapi and h264_qsv; hardware encoders still need the host driver. A host
+# repository that launches `vr-link-stream` (igris_c_gmr) mirrors these three
+# feature dependency sets in its own pixi manifest.
 [tool.pixi.feature.video.dependencies]
 av = ">=17.0.1,<18"
 
@@ -104,16 +108,11 @@ pyyaml = ">=6.0,<7"
 [tool.pixi.feature.test.dependencies]
 pytest = ">=8"
 
+# No stream tasks here (2.1): the usb/dds senders need the igris_c_sdk binding this
+# repo no longer carries, and every target (robot, MuJoCo, Isaac, shm) is started by
+# the host repository's launcher (igris_c_gmr), which selects the packaged
+# stream_*.yaml per target.
 [tool.pixi.feature.video.tasks]
-camera-tcp-stream = "vr-link-stream --source usb"
-dds-tcp-stream = "vr-link-stream --source dds"
-# MuJoCo publishing the igris_c_camera DDS contract (igris_c_mujoco vision_dds_sink): same
-# source, but the ideal rig calibration and the MuJoCo HUD label come from the file.
-dds-tcp-stream-mujoco = "vr-link-stream --source dds --config src/vr_link/configs/stream_dds_mujoco.yaml"
-# Isaac Sim teleop bridge (hit-tasks): same DDS contract, but the eye cameras are rendered
-# with the OpenCV fisheye model, so the ideal calibration is served with k = 0.
-dds-tcp-stream-isaac = "vr-link-stream --source dds --config src/vr_link/configs/stream_dds_isaac.yaml"
-shm-tcp-stream = "vr-link-stream --source shm"
 make-mujoco-calibration = "vr-link-make-calibration"
 
 [tool.pixi.feature.calibration.tasks]
@@ -132,14 +131,6 @@ test = { cmd = "python -m pytest tests -q", env = { PYTEST_DISABLE_PLUGIN_AUTOLO
 
 [tool.pixi.tasks]
 generate = "scripts/generate.sh"
-# igris_c_sdk Python binding: a human builds the wheel (`task wheel` in
-# thirdparty/igris_c_sdk at the pinned commit); this installs it into the env.
-# Fresh clone, all three steps (submodules, task wheel, install-sdk) in one go:
-# `scripts/setup_sdk.sh` from a plain shell with ROS 2 sourced. It is not a pixi
-# task on purpose: `task wheel` must configure CMake outside this env.
-install-sdk = "bash scripts/install_sdk_wheel.sh"
-check-sdk = "python -c \"import igris_c_sdk; print('igris_c_sdk', getattr(igris_c_sdk, '__version__', '?'), igris_c_sdk.__file__); assert hasattr(igris_c_sdk, 'ChannelFactory')\""
 
 [tool.pixi.environments]
 default = { features = ["video", "calibration", "test"], solve-group = "default" }
-stream = { features = ["video", "calibration"], solve-group = "default" }
