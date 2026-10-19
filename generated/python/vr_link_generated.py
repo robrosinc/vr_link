@@ -22,6 +22,11 @@ class SourceKind(object):
     Isaac = 3
 
 
+class VideoStream(object):
+    EyesStereo = 0
+    HeadRgb = 1
+
+
 class Message(object):
     NONE = 0
     VideoFrame = 1
@@ -480,8 +485,15 @@ class VideoFrame(object):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
         return o == 0
 
+    # VideoFrame
+    def StreamId(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
+        return 0
+
 def VideoFrameStart(builder):
-    builder.StartObject(5)
+    builder.StartObject(6)
 
 def VideoFrameAddCodec(builder, codec):
     builder.PrependUint8Slot(0, codec, 1)
@@ -500,6 +512,9 @@ def VideoFrameAddData(builder, data):
 
 def VideoFrameStartDataVector(builder, numElems):
     return builder.StartVector(1, numElems, 1)
+
+def VideoFrameAddStreamId(builder, streamId):
+    builder.PrependUint8Slot(5, streamId, 0)
 
 def VideoFrameEnd(builder):
     return builder.EndObject()

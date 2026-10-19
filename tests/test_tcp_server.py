@@ -10,6 +10,7 @@ from vr_link.messages import (
     RobotStateSample,
     SignalsSample,
     SourceKind,
+    VideoStream,
     decode_calibration,
     decode_video_frame,
     parse_envelope,
@@ -81,3 +82,43 @@ def test_backlog_over_limit_detaches_the_client():
     while not server._queue.empty():
         records.append(server._queue.get_nowait())
     assert records[-1] == b""  # detach sentinel follows the oversized record
+
+
+def test_each_stream_waits_for_its_own_keyframe_and_head_frames_carry_no_state():
+    server = _attached_server(send_calibration=False)
+    head = dict(width=640, height=480, stream_id=VideoStream.HEAD_RGB)
+    stereo = dict(width=64, height=48, signals=SignalsSample())
+    server.send_video(b"h-delta", is_key=False, wall_ns=1, **head)  # dropped: head has no IDR yet
+    server.send_video(b"s-key", is_key=True, wall_ns=2, **stereo)
+    server.send_video(b"h-delta2", is_key=False, wall_ns=3, **head)  # still dropped despite the stereo IDR
+    server.send_video(b"h-key", is_key=True, wall_ns=4, **head)
+    server.send_video(b"s-delta", is_key=False, wall_ns=5, **stereo)
+    server.send_video(b"h-delta3", is_key=False, wall_ns=6, **head)
+    envs = _drain(server)
+    kinds = [e.kind for e in envs]
+    assert kinds == [
+        MessageKind.SIGNALS, MessageKind.VIDEO_FRAME,  # stereo frame with its state
+        MessageKind.VIDEO_FRAME,                       # head key frame, no state
+        MessageKind.SIGNALS, MessageKind.VIDEO_FRAME,
+        MessageKind.VIDEO_FRAME,
+    ]
+    assert [e.seq for e in envs] == list(range(6))
+    frames = [decode_video_frame(e) for e in envs if e.kind is MessageKind.VIDEO_FRAME]
+    assert [(f.stream_id, f.data) for f in frames] == [
+        (VideoStream.EYES_STEREO, b"s-key"), (VideoStream.HEAD_RGB, b"h-key"),
+        (VideoStream.EYES_STEREO, b"s-delta"), (VideoStream.HEAD_RGB, b"h-delta3"),
+    ]
+    assert [(f.width, f.height) for f in frames if f.stream_id is VideoStream.HEAD_RGB] == [(640, 480)] * 2
+
+
+def test_keyframe_requests_are_per_stream_and_renewed_per_connection():
+    server = EnvelopeTcpServer(send_calibration=False)
+    assert not server.consume_keyframe_request()  # no client yet
+    server._attach_client()
+    assert server.consume_keyframe_request() and not server.consume_keyframe_request()
+    # A stream that first appears during a connection is owed an IDR once as well.
+    assert server.consume_keyframe_request(VideoStream.HEAD_RGB) and not server.consume_keyframe_request(VideoStream.HEAD_RGB)
+    server._attach_client()  # the next headset: both known streams owe an IDR again
+    assert server.consume_keyframe_request(VideoStream.HEAD_RGB) and server.consume_keyframe_request(VideoStream.EYES_STEREO)
+    assert not server.consume_keyframe_request(VideoStream.HEAD_RGB)
+    assert server.connections == 2

@@ -126,15 +126,26 @@ table VRState {
 // Which kind of system produced the stream (HUD label, no behaviour change).
 enum SourceKind : ubyte { Unknown = 0, Robot = 1, MuJoCo = 2, Isaac = 3 }
 
-// One H.264 Annex-B access unit of the side-by-side stereo frame (right eye
-// in the LEFT half, matching the hardware). SPS/PPS are repeated in-band on
-// every IDR; a receiver gets nothing before the first key frame.
+// Which camera a VideoFrame carries (2.2). Each stream is an independent
+// H.264 sequence (own SPS/PPS and key frames); receivers demultiplex on
+// stream_id and keep one decoder per stream. The Signals/RobotState records
+// of a frame precede the EyesStereo frame only; HeadRgb frames carry none.
+enum VideoStream : ubyte { EyesStereo = 0, HeadRgb = 1 }
+
+// One H.264 Annex-B access unit of one video stream. EyesStereo is the
+// side-by-side stereo frame (right eye in the LEFT half, matching the
+// hardware); HeadRgb (2.2) is the head colour camera (D435, 640x480). SPS/PPS
+// are repeated in-band on every IDR; a receiver gets nothing on a stream
+// before that stream's first key frame.
 table VideoFrame {
   codec: ubyte = 1;        // 1 = H.264 (the only value in 2.0)
-  width: uint;             // SBS frame width (both eyes)
+  width: uint;             // frame width (EyesStereo: both eyes side by side)
   height: uint;
   is_key: bool;
   data: [ubyte];
+  // 2.2: the stream this access unit belongs to. Senders older than this
+  // field produce EyesStereo (0).
+  stream_id: VideoStream = EyesStereo;
 }
 
 // Per-eye camera model in pixels of the per-eye image: OpenCV fisheye

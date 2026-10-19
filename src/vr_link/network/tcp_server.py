@@ -5,14 +5,18 @@ headset needs arrives on this one socket as ``frame_payload(Envelope)``
 records:
 
 * ``Calibration`` once per connection, before the first other record;
-* per video frame ``Signals`` -> ``RobotState`` -> ``VideoFrame``, all with
-  the same ``wall_ns``/``sim_ns`` and consecutive ``seq``.
+* per stereo video frame ``Signals`` -> ``RobotState`` -> ``VideoFrame``, all
+  with the same ``wall_ns``/``sim_ns`` and consecutive ``seq``;
+* optionally a second video stream (``VideoFrame.stream_id = HeadRgb``) whose
+  records interleave with the above and carry no state records.
 
 Delivery rules (unchanged from the 1.x VSTR server): records queued while no
-client is attached are dropped; video records are dropped until the first key
-frame of a connection; nothing is dropped mid-stream; a client that falls
-behind ``max_queue_bytes`` is disconnected. ``send_*`` never block on the
-network - a writer thread drains the per-connection queue.
+client is attached are dropped; video records of a stream are dropped until
+that stream's first key frame of a connection; nothing is dropped mid-stream;
+a client that falls behind ``max_queue_bytes`` is disconnected. ``send_*``
+never block on the network - a writer thread drains the per-connection queue.
+The three records of a stereo frame are queued under one lock, so a head
+frame never lands between them.
 """
 
 from __future__ import annotations
@@ -22,13 +26,13 @@ import queue
 import select
 import socket
 import threading
-from typing import Any, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, Set
 
 from ..messages.calibration import build_calibration_payload
 from ..messages.envelope import VRL2_MAX_PAYLOAD_BYTES, frame_payload
 from ..messages.robot_state import RobotStateSample, build_robot_state_payload
 from ..messages.signals import SignalsSample, build_signals_payload
-from ..messages.video import build_video_frame_payload
+from ..messages.video import VideoStream, build_video_frame_payload
 from ..utils.clocks import wall_ns as now_wall_ns
 
 logger = logging.getLogger(__name__)
@@ -57,13 +61,17 @@ class EnvelopeTcpServer:
         self._calibration: Optional[Mapping[str, Any]] = None
         self._queue: Optional["queue.Queue[bytes]"] = None
         self._queued_bytes = 0
-        self._awaiting_keyframe = True
+        # Per stream_id; a stream absent from the dict is still awaiting its key frame.
+        self._awaiting_keyframe: Dict[int, bool] = {}
         self._sequence = 0
         self._connected = False
         self._calibration_sent = False
         self.connections = 0
 
-        self._keyframe_requested = threading.Event()
+        # Streams that have ever asked (consume_keyframe_request) or sent, and the
+        # ones still owed an IDR for the current connection.
+        self._known_streams: Set[int] = set()
+        self._keyframe_pending: Set[int] = set()
         self._stop_requested = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._server_socket: Optional[socket.socket] = None
@@ -107,13 +115,20 @@ class EnvelopeTcpServer:
         with self._lock:
             return self._connected
 
-    def consume_keyframe_request(self) -> bool:
-        """True once per new connection: the encoder should emit an IDR next."""
+    def consume_keyframe_request(self, stream_id: int = VideoStream.EYES_STEREO) -> bool:
+        """True once per stream per new connection: that stream's encoder should emit an IDR next.
 
-        if self._keyframe_requested.is_set():
-            self._keyframe_requested.clear()
-            return True
-        return False
+        A stream that first asks while a client is attached is owed an IDR too.
+        """
+
+        stream_id = int(stream_id)
+        with self._lock:
+            is_new = stream_id not in self._known_streams
+            self._known_streams.add(stream_id)
+            if stream_id in self._keyframe_pending:
+                self._keyframe_pending.discard(stream_id)
+                return True
+            return is_new and self._connected
 
     def set_calibration(self, cal: Mapping[str, Any]) -> None:
         """Store the calibration sent once per connection before any other record."""
@@ -134,25 +149,32 @@ class EnvelopeTcpServer:
         sim_ns: int = 0,
         robot_state: Optional[RobotStateSample] = None,
         signals: Optional[SignalsSample] = None,
+        stream_id: int = VideoStream.EYES_STEREO,
     ) -> None:
-        """Queue [Calibration once] -> Signals -> RobotState -> VideoFrame for one frame."""
+        """Queue [Calibration once] -> Signals -> RobotState -> VideoFrame for one frame of ``stream_id``.
+
+        State records belong to the stereo stream; callers pass none for a
+        secondary stream. Each stream is gated on its own first key frame.
+        """
 
         if len(access_unit) > VRL2_MAX_PAYLOAD_BYTES:
             logger.warning("access unit %d bytes exceeds the %d-byte record limit; dropped", len(access_unit), VRL2_MAX_PAYLOAD_BYTES)
             return
+        stream_id = int(stream_id)
         with self._lock:
             if self._queue is None:
                 return
-            if self._awaiting_keyframe:
+            self._known_streams.add(stream_id)
+            if self._awaiting_keyframe.get(stream_id, True):
                 if not is_key:
                     return
-                self._awaiting_keyframe = False
+                self._awaiting_keyframe[stream_id] = False
             self._enqueue_calibration_locked()
             self._enqueue_state_locked(wall_ns, sim_ns, robot_state, signals)
             self._enqueue_locked(
                 build_video_frame_payload(
                     access_unit, is_key=is_key, width=width, height=height,
-                    seq=self._next_sequence_locked(), wall_ns=wall_ns, sim_ns=sim_ns,
+                    seq=self._next_sequence_locked(), wall_ns=wall_ns, sim_ns=sim_ns, stream_id=stream_id,
                 )
             )
             drop_client = self._queued_bytes > self._max_queue_bytes
@@ -213,6 +235,19 @@ class EnvelopeTcpServer:
         self._queue.put(record)
         self._queued_bytes += len(record)
 
+    def _attach_client(self) -> None:
+        """Fresh per-connection state: new queue, seq 0, every known stream owes an IDR."""
+
+        with self._lock:
+            self._queue = queue.Queue()
+            self._queued_bytes = 0
+            self._sequence = 0
+            self._awaiting_keyframe = {}
+            self._calibration_sent = False
+            self._connected = True
+            self.connections += 1
+            self._keyframe_pending = set(self._known_streams)
+
     def _detach_client(self) -> None:
         with self._lock:
             if self._queue is not None:
@@ -230,15 +265,7 @@ class EnvelopeTcpServer:
 
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             logger.info("Headset connected from %s:%d", addr[0], addr[1])
-            with self._lock:
-                self._queue = queue.Queue()
-                self._queued_bytes = 0
-                self._sequence = 0
-                self._awaiting_keyframe = True
-                self._calibration_sent = False
-                self._connected = True
-                self.connections += 1
-            self._keyframe_requested.set()
+            self._attach_client()
             try:
                 self._writer_loop(conn)
             finally:

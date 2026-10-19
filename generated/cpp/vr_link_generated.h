@@ -126,6 +126,36 @@ inline const char *EnumNameSourceKind(SourceKind e) {
   return EnumNamesSourceKind()[index];
 }
 
+enum VideoStream : uint8_t {
+  VideoStream_EyesStereo = 0,
+  VideoStream_HeadRgb = 1,
+  VideoStream_MIN = VideoStream_EyesStereo,
+  VideoStream_MAX = VideoStream_HeadRgb
+};
+
+inline const VideoStream (&EnumValuesVideoStream())[2] {
+  static const VideoStream values[] = {
+    VideoStream_EyesStereo,
+    VideoStream_HeadRgb
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesVideoStream() {
+  static const char * const names[3] = {
+    "EyesStereo",
+    "HeadRgb",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameVideoStream(VideoStream e) {
+  if (::flatbuffers::IsOutRange(e, VideoStream_EyesStereo, VideoStream_HeadRgb)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesVideoStream()[index];
+}
+
 enum Message : uint8_t {
   Message_NONE = 0,
   Message_VideoFrame = 1,
@@ -612,7 +642,8 @@ struct VideoFrame FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_WIDTH = 6,
     VT_HEIGHT = 8,
     VT_IS_KEY = 10,
-    VT_DATA = 12
+    VT_DATA = 12,
+    VT_STREAM_ID = 14
   };
   uint8_t codec() const {
     return GetField<uint8_t>(VT_CODEC, 1);
@@ -629,6 +660,9 @@ struct VideoFrame FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const ::flatbuffers::Vector<uint8_t> *data() const {
     return GetPointer<const ::flatbuffers::Vector<uint8_t> *>(VT_DATA);
   }
+  robros::vr::VideoStream stream_id() const {
+    return static_cast<robros::vr::VideoStream>(GetField<uint8_t>(VT_STREAM_ID, 0));
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -638,6 +672,7 @@ struct VideoFrame FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyField<uint8_t>(verifier, VT_IS_KEY, 1) &&
            VerifyOffset(verifier, VT_DATA) &&
            verifier.VerifyVector(data()) &&
+           VerifyField<uint8_t>(verifier, VT_STREAM_ID, 1) &&
            verifier.EndTable();
   }
 };
@@ -661,6 +696,9 @@ struct VideoFrameBuilder {
   void add_data(::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> data) {
     fbb_.AddOffset(VideoFrame::VT_DATA, data);
   }
+  void add_stream_id(robros::vr::VideoStream stream_id) {
+    fbb_.AddElement<uint8_t>(VideoFrame::VT_STREAM_ID, static_cast<uint8_t>(stream_id), 0);
+  }
   explicit VideoFrameBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -678,11 +716,13 @@ inline ::flatbuffers::Offset<VideoFrame> CreateVideoFrame(
     uint32_t width = 0,
     uint32_t height = 0,
     bool is_key = false,
-    ::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> data = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> data = 0,
+    robros::vr::VideoStream stream_id = robros::vr::VideoStream_EyesStereo) {
   VideoFrameBuilder builder_(_fbb);
   builder_.add_data(data);
   builder_.add_height(height);
   builder_.add_width(width);
+  builder_.add_stream_id(stream_id);
   builder_.add_is_key(is_key);
   builder_.add_codec(codec);
   return builder_.Finish();
@@ -694,7 +734,8 @@ inline ::flatbuffers::Offset<VideoFrame> CreateVideoFrameDirect(
     uint32_t width = 0,
     uint32_t height = 0,
     bool is_key = false,
-    const std::vector<uint8_t> *data = nullptr) {
+    const std::vector<uint8_t> *data = nullptr,
+    robros::vr::VideoStream stream_id = robros::vr::VideoStream_EyesStereo) {
   auto data__ = data ? _fbb.CreateVector<uint8_t>(*data) : 0;
   return robros::vr::CreateVideoFrame(
       _fbb,
@@ -702,7 +743,8 @@ inline ::flatbuffers::Offset<VideoFrame> CreateVideoFrameDirect(
       width,
       height,
       is_key,
-      data__);
+      data__,
+      stream_id);
 }
 
 struct CameraModel FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {

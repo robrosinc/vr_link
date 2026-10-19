@@ -19,6 +19,20 @@ tcp:
   gop: 30
   encoder: "sw"
 
+# Second video stream (VideoFrame.stream_id = HeadRgb) from the head colour camera: the
+# igris_c_camera d435 worker and the hit-tasks Isaac bridge publish CompressedImage_ on
+# <ns>/sensor/d435_color/compressed (frame_id "d435_color", 640x480, 15 fps). Needs a headset
+# build that demultiplexes stream_id; an older build would feed these frames to its stereo
+# decoder, so it stays off until that build is deployed. Encoded with tcp.encoder.
+head_rgb:
+  enable: false
+  camera_topic: "sensor/d435_color/compressed"   # bare name; the channel prefixes the namespace
+  frame_id: ""              # drop samples whose header.frame_id differs (empty = accept all)
+  resolution: [640, 480]    # frames are resized to this before encoding
+  fps: 15
+  bitrate: 2000000
+  gop: 15
+
 calibration:
   enable: true
   host: "0.0.0.0"

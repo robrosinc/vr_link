@@ -21,7 +21,7 @@ unchanged (byte-compatible with 1.x receivers such as `igris_c_gmr`).
 
 | Port | Direction | Format | Code |
 |------|-----------|--------|------|
-| 9100 | PC -> headset | `VRL2` framed `Envelope` stream: `Calibration` once per connection, then per frame `Signals` -> `RobotState` -> `VideoFrame` | `vr_link.network.tcp_server` |
+| 9100 | PC -> headset | `VRL2` framed `Envelope` stream: `Calibration` once per connection, then per stereo frame `Signals` -> `RobotState` -> `VideoFrame`; with `head_rgb.enable` also interleaved `VideoFrame(stream_id=HeadRgb)` records (2.2) | `vr_link.network.tcp_server` |
 | 9101 | headset -> PC request, PC -> headset reply | one framed `Envelope(CalibrationRequest)` in, one framed `Envelope(Calibration)` out, then close | `vr_link.network.calibration_server` |
 | 9102 | headset -> PC | `VRS1` framed `VRState` (**unchanged since 1.x**) | `vr_link.network.tcp_device` |
 
@@ -53,7 +53,7 @@ headset without video (NO CAMERA mode) still gets the recording / convergence
 
 | Body | Content |
 |---|---|
-| `VideoFrame` | one H.264 Annex-B access unit of the SBS frame (`codec=1`, `width`/`height` of the full SBS frame, `is_key`, `data`). Right eye in the LEFT half. SPS/PPS repeated on every IDR; nothing is sent to a new connection before its first IDR. |
+| `VideoFrame` | one H.264 Annex-B access unit of one video stream (`codec=1`, `width`/`height` of the frame, `is_key`, `data`, `stream_id: VideoStream {EyesStereo, HeadRgb}`). `EyesStereo` (0, the default and the only stream before 2.2) is the SBS frame with the right eye in the LEFT half; `HeadRgb` (1) is the head colour camera (D435, 640x480) and carries no `Signals`/`RobotState`. Each stream is an independent H.264 sequence: SPS/PPS repeated on every IDR, nothing is sent on a stream to a new connection before that stream's first IDR, and a receiver keeps one decoder per stream. The sender queues a stereo frame's three records atomically, so a head frame never splits them. |
 | `Calibration` | per-eye `image_width`/`image_height` and `left`/`right` `CameraModel {fx fy cx cy k1 k2 k3 k4 r[9]}` (see "Calibration contract"). Sent once per 9100 connection (newest wins on the headset) and as the 9101 reply. |
 | `CalibrationRequest` | empty; the 9101 request body. |
 | `RobotState` | frame-matched joint state, four groups each with `*_valid` and `*_stamp_ns`: `body_actual[31]` (LowState), `body_reference[31]` (`gmr/refstate`), `hand_actual[12]` (HandState), `hand_command[12]` (`handcmd`), plus `base_pose: Pose` (valid only from simulators). An invalid group is an empty vector and must be ignored; a group the sender could not match within tolerance is invalid, never stale. |
@@ -332,6 +332,7 @@ the file's directory; `pkg:` addresses the package (`pkg:configs/...`) and
 ```yaml
 eyes_stereo: {cam_index, resolution: [1280, 480], fps, enable_stereo, apply_tuning}
 tcp:         {host, port: 9100, bitrate, gop, fourcc, encoder: sw|libx264|h264_nvenc|h264_vaapi|h264_qsv}
+head_rgb:    {enable: false, camera_topic: sensor/d435_color/compressed, frame_id, resolution: [640, 480], fps: 15, bitrate, gop}
 calibration: {enable, host, port: 9101, provider: yaml|json|ideal_from_source|ideal_from_config,
               yaml, json, image_width, image_height, request_timeout,
               ideal: {model: pinhole|fisheye_equidistant, fovy_deg, focal_px, cx, cy, toe_out_deg, baseline_mm}}
@@ -398,8 +399,11 @@ driver at runtime.
   old senders omit. Consumers pin this repo at a commit, so the
   "schema version" of a build is the submodule pin. (2.1 appended
   `VRState.teleop_state` and the four `Signals` motion-feedback fields this
-  way; `Envelope.schema_version` stays 2 and 2.0 senders/receivers still
-  interoperate.)
+  way; 2.2 appended `VideoFrame.stream_id` and the `VideoStream` enum.
+  `Envelope.schema_version` stays 2 and 2.0 senders/receivers still
+  interoperate, with one operational caveat: a pre-2.2 receiver treats every
+  `VideoFrame` as the stereo stream, so `head_rgb.enable` must stay off until
+  the headset build demultiplexes `stream_id`.)
 - After changing `vr_link.fbs`, run `pixi run generate` and commit the
   schema together with `generated/` in one commit, so pin = schema =
   bindings always agree. Consumers then only bump their submodule pin.

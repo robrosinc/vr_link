@@ -5,6 +5,7 @@ and adds the robot-state sources::
 
     eyes_stereo: {cam_index, resolution: [w, h], fps, enable_stereo, apply_tuning}
     tcp:         {host, port, bitrate, gop, fourcc, encoder}
+    head_rgb:    {enable, camera_topic, frame_id, resolution: [w, h], fps, bitrate, gop}
     calibration: {enable, host, port, provider, yaml, json, image_width, image_height,
                   request_timeout,
                   ideal: {model: pinhole|fisheye_equidistant, fovy_deg, focal_px, cx, cy,
@@ -198,6 +199,24 @@ class DdsConfig:
 
 
 @dataclass
+class HeadRgbConfig:
+    """Second video stream (``VideoStream.HEAD_RGB``) from the head colour camera's DDS topic.
+
+    Off by default: a headset build without stream demultiplexing would feed
+    these frames to its stereo decoder. The encoder codec is ``tcp.encoder``.
+    """
+
+    enable: bool = False
+    camera_topic: str = "sensor/d435_color/compressed"
+    frame_id: Optional[str] = None
+    width: int = 640
+    height: int = 480
+    fps: float = 15.0
+    bitrate: int = 2_000_000
+    gop: int = 15
+
+
+@dataclass
 class ShmSourceConfig:
     shm_name: str = "/igris_c_mujoco_vision_shm"
     read_timeout_sec: float = 1.0
@@ -217,10 +236,12 @@ class PumpConfig:
     tolerances: MatchTolerances
     signals: SignalsSpec
     enable_stereo: bool = True
+    head_rgb: HeadRgbConfig = field(default_factory=HeadRgbConfig)
 
     def needs_dds(self) -> bool:
         return (
             self.source_kind == "dds"
+            or self.head_rgb.enable
             or bool(self.robot_state.dds_fields())
             or self.signals.recording == "dds"
             or self.signals.motion_feedback == "dds"
@@ -268,6 +289,7 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
     cal = _section(data, "calibration")
     dds = _section(data, "dds")
     shm = _section(data, "shm")
+    head = _section(data, "head_rgb")
     robot = _section(data, "robot_state")
     signals_raw = _section(data, "signals")
 
@@ -353,6 +375,19 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
         read_timeout_sec=float(shm.get("read_timeout_sec", 1.0)),
     )
 
+    head_resolution = head.get("resolution", [HeadRgbConfig.width, HeadRgbConfig.height])
+    if not isinstance(head_resolution, (list, tuple)) or len(head_resolution) != 2:
+        raise ConfigError("head_rgb.resolution must be [width, height]")
+    head_cfg = HeadRgbConfig(
+        enable=bool(head.get("enable", False)),
+        camera_topic=str(head.get("camera_topic") or HeadRgbConfig.camera_topic),
+        frame_id=(head.get("frame_id") or None),
+        width=int(head_resolution[0]), height=int(head_resolution[1]),
+        fps=float(head.get("fps", HeadRgbConfig.fps)),
+        bitrate=parse_bitrate(head.get("bitrate", HeadRgbConfig.bitrate)),
+        gop=int(head.get("gop", HeadRgbConfig.gop)),
+    )
+
     tol_raw = dict(robot.get("tolerances_ms") or {})
     try:
         robot_spec = RobotStateSpec(
@@ -394,6 +429,7 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
         tolerances=tolerances,
         signals=signals_spec,
         enable_stereo=bool(eyes.get("enable_stereo", True)),
+        head_rgb=head_cfg,
     )
 
 
@@ -410,6 +446,7 @@ __all__ = [
     "ConfigError",
     "DdsConfig",
     "EncoderConfig",
+    "HeadRgbConfig",
     "IdealRigConfig",
     "PumpConfig",
     "SOURCE_KINDS",

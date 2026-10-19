@@ -13,6 +13,7 @@ from vr_link.messages import (
     RobotStateSample,
     SignalsSample,
     SourceKind,
+    VideoStream,
     decode_calibration,
     decode_robot_state,
     decode_signals,
@@ -194,3 +195,29 @@ def test_pump_sends_a_state_heartbeat_while_the_source_has_no_frames():
         thread.join(timeout=5.0)
         server.stop()
     assert pump.heartbeats_sent >= 2 and pump.frames_sent == 0 and pump.encoder is None
+
+
+def test_head_rgb_pump_sends_only_tagged_video_records(sw_available):
+    source = FakeSource(count=4)
+    server = EnvelopeTcpServer(host="127.0.0.1", port=0, send_calibration=False)
+    server.start()
+    stop = threading.Event()
+    pump = StreamPump(source, server, encoder_cfg=_encoder_cfg(), read_timeout=0.05, stream_id=VideoStream.HEAD_RGB)
+    assert pump.label == "head_rgb"
+    thread = threading.Thread(target=pump.run, args=(stop,), daemon=True)
+    try:
+        with socket.create_connection(("127.0.0.1", server.port), timeout=5.0) as conn:
+            conn.settimeout(5.0)
+            client = EnvelopeClient(conn)
+            thread.start()
+            envs = [client.next() for _ in range(2)]
+            assert [e.kind for e in envs] == [MessageKind.VIDEO_FRAME] * 2
+            frames = [decode_video_frame(e) for e in envs]
+            assert all(f.stream_id is VideoStream.HEAD_RGB for f in frames)
+            assert frames[0].is_key and (frames[0].width, frames[0].height) == (W, H)
+            assert envs[0].seq + 1 == envs[1].seq
+    finally:
+        stop.set()
+        thread.join(timeout=5.0)
+        server.stop()
+    assert pump.frames_sent >= 2 and pump.heartbeats_sent == 0

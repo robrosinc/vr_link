@@ -2,8 +2,11 @@
 
 Port 9100 carries framed FlatBuffers ``Envelope`` records (Calibration once,
 then per frame Signals -> RobotState -> VideoFrame); port 9101 answers a
-``CalibrationRequest`` with a ``Calibration``. Only the frame source and the
-robot-state sources differ between modes::
+``CalibrationRequest`` with a ``Calibration``. With ``head_rgb.enable`` a
+second video stream (``VideoFrame.stream_id = HeadRgb``, the head colour
+camera's DDS topic) is encoded on its own thread and interleaved on 9100
+without state records. Only the frame source and the robot-state sources
+differ between modes::
 
     vr-link-stream --source usb   [--config stream_usb.yaml]   NUC USB camera + robot DDS state
     vr-link-stream --source dds   [--config stream_dds.yaml]   igris_c_camera DDS topic + robot DDS state
@@ -28,8 +31,9 @@ from typing import List, Optional, Sequence
 from vr_link.calibration.ideal import ideal_stereo_fisheye_from_focal, ideal_stereo_from_fovy, ideal_stereo_from_metadata
 from vr_link.calibration.schema import CalibrationError
 from vr_link.network.calibration_server import CalibrationProvider, CalibrationServer, json_file_provider, yaml_file_provider
+from vr_link.messages.video import VideoStream
 from vr_link.network.tcp_server import EnvelopeTcpServer
-from vr_link.pipeline.config import PumpConfig, load_pump_config, normalize_source_kind, resolve_config_path
+from vr_link.pipeline.config import EncoderConfig, PumpConfig, load_pump_config, normalize_source_kind, resolve_config_path
 from vr_link.pipeline.pump import StreamPump
 from vr_link.pipeline.robot_state import DdsStateBuffers, RobotStateAssembler, SignalsProvider
 from vr_link.sources import FrameSource
@@ -98,6 +102,25 @@ def build_source(cfg: PumpConfig, dds: Optional[DdsRuntime]) -> FrameSource:
 
         return ShmSource(cfg.shm.shm_name)
     raise ValueError(f"unknown source kind {cfg.source_kind!r}")
+
+
+def build_head_source(cfg: PumpConfig, dds: Optional[DdsRuntime]) -> FrameSource:
+    """The head RGB camera always comes from its DDS topic, whatever feeds the stereo stream."""
+
+    from vr_link.sources.dds_camera import DdsCameraSource
+
+    assert dds is not None
+    head = cfg.head_rgb
+    return DdsCameraSource(dds.channel, head.camera_topic, frame_id=head.frame_id, width=head.width, height=head.height)
+
+
+def build_head_pump(cfg: PumpConfig, dds: Optional[DdsRuntime], server: EnvelopeTcpServer, *, verbose: bool) -> StreamPump:
+    """Video-only pump for ``VideoStream.HEAD_RGB``: no calibration, state or heartbeat providers."""
+
+    head = cfg.head_rgb
+    encoder_cfg = EncoderConfig(codec=cfg.encoder.codec, bitrate=head.bitrate, gop=head.gop, fps=head.fps)
+    return StreamPump(build_head_source(cfg, dds), server, encoder_cfg=encoder_cfg, read_timeout=1.0, verbose=verbose,
+                      stream_id=VideoStream.HEAD_RGB)
 
 
 def build_calibration_provider(cfg: PumpConfig, source: FrameSource) -> Optional[CalibrationProvider]:
@@ -198,7 +221,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             except ImportError as error:
                 raise SystemExit(
                     f"{error}\nThis config needs DDS for robot_state {sorted(cfg.robot_state.dds_fields())}"
-                    f"{' and the camera' if cfg.source_kind == 'dds' else ''}; install the wheel or set those fields to 'none'."
+                    f"{' and the camera' if cfg.source_kind == 'dds' else ''}"
+                    f"{' and head_rgb' if cfg.head_rgb.enable else ''}; install the wheel or set those fields to 'none'."
                 ) from error
             closers.append(dds.close)
         source = build_source(cfg, dds)
@@ -231,9 +255,23 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             robot_state_now=(lambda wall_ns: assembler.assemble(wall_ns, None)) if cfg.robot_state.dds_fields() else None,
             signals_now=lambda: signals.sample(None),
         )
+        if cfg.head_rgb.enable:
+            head_pump = build_head_pump(cfg, dds, server, verbose=args.verbose)
+
+            def run_head_pump() -> None:
+                try:
+                    head_pump.run(stop)
+                except Exception:  # noqa: BLE001 - the stereo stream keeps running without the head stream
+                    logger.exception("head_rgb pump failed; the head stream is down until restart")
+
+            head_thread = threading.Thread(target=run_head_pump, name="head-rgb-pump", daemon=True)
+            head_thread.start()
+            closers.append(lambda: head_thread.join(timeout=5.0))
+            logger.info("head_rgb stream on %s (%dx%d, %s fps)", cfg.head_rgb.camera_topic, cfg.head_rgb.width, cfg.head_rgb.height, cfg.head_rgb.fps)
         logger.info("Listening on %s:%d (%s source, encoder %s, robot_state %s). Waiting for headset...", cfg.stream.host, server.port, args.source, cfg.encoder.codec, cfg.robot_state)
         pump.run(stop)
     finally:
+        stop.set()  # also ends the head pump thread when the stereo pump raised
         for close in reversed(closers):
             try:
                 close()

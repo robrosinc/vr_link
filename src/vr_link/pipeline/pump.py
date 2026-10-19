@@ -19,6 +19,9 @@ robot state. The source read timeout is capped to the heartbeat period.
 
 The encoder is created from the first frame's size (producers such as the
 MuJoCo segment fix the size at runtime) and recreated if the size changes.
+``stream_id`` tags every ``VideoFrame`` (``VideoStream``); a secondary stream
+(head RGB) runs its own pump on its own thread against the same server with
+no calibration or state providers, so only its video records go out.
 When a calibration provider is given, its value is handed to the server as
 the once-per-connection in-band ``Calibration`` record. ``robot_state`` and
 ``signals`` are per-frame providers (see :mod:`vr_link.pipeline.robot_state`)
@@ -38,6 +41,7 @@ from .config import EncoderConfig
 from ..video.encoder import H264Encoder
 from ..sources import Frame, FrameSource
 from ..messages.robot_state import RobotStateSample
+from ..messages.video import VideoStream
 from ..messages.signals import SignalsSample
 from ..network.tcp_server import EnvelopeTcpServer
 
@@ -75,9 +79,12 @@ class StreamPump:
         robot_state_now: Optional[RobotStateNowProvider] = None,
         signals_now: Optional[SignalsNowProvider] = None,
         state_heartbeat_hz: float = DEFAULT_STATE_HEARTBEAT_HZ,
+        stream_id: int = VideoStream.EYES_STEREO,
     ) -> None:
         self.source = source
         self.server = server
+        self.stream_id = VideoStream(int(stream_id))
+        self.label = self.stream_id.name.lower()
         self.robot_state = robot_state
         self.signals = signals
         self.stats_text = stats_text  # e.g. RobotStateAssembler.format_stats, appended to the rate log
@@ -134,7 +141,7 @@ class StreamPump:
             self.encoder = None
         if self.encoder is None:
             self.encoder = self._encoder_factory(frame.width, frame.height)
-            logger.info("Encoding %dx%d with %s", frame.width, frame.height, self.encoder.codec_name)
+            logger.info("%s: encoding %dx%d with %s", self.label, frame.width, frame.height, self.encoder.codec_name)
             self._params_published = False
         return self.encoder
 
@@ -168,7 +175,7 @@ class StreamPump:
                 if frame is None:
                     now = time.monotonic()
                     if now - last_idle_warn >= IDLE_WARN_INTERVAL_SEC:
-                        logger.warning("No frames from the source; still waiting...")
+                        logger.warning("%s: no frames from the source; still waiting...", self.label)
                         last_idle_warn = now
                     self._maybe_send_state_heartbeat()
                     continue
@@ -180,7 +187,7 @@ class StreamPump:
 
                 encoder = self._ensure_encoder(frame)
                 self._publish_params(frame)
-                if self.server.consume_keyframe_request():
+                if self.server.consume_keyframe_request(self.stream_id):
                     encoder.request_keyframe()
 
                 if self.max_fps and self._last_sent_ns is not None:
@@ -201,10 +208,11 @@ class StreamPump:
                         sim_ns=frame.sim_ns or 0,
                         robot_state=state,
                         signals=sig,
+                        stream_id=self.stream_id,
                     )
                     state, sig = None, None  # one state record per frame even if the encoder returns several units
                     if self.verbose:
-                        logger.info("frame=%d %s bytes=%7d", frame.index, "KEY" if unit.is_key else "   ", len(unit.data))
+                        logger.info("%s frame=%d %s bytes=%7d", self.label, frame.index, "KEY" if unit.is_key else "   ", len(unit.data))
                 self._last_sent_ns = frame.capture_ns
                 self.frames_sent += 1
 
@@ -212,7 +220,7 @@ class StreamPump:
                 now = time.monotonic()
                 if now - fps_t0 >= FPS_REPORT_INTERVAL_SEC:
                     extra = f"; robot_state match: {self.stats_text()}" if self.stats_text is not None else ""
-                    logger.info("capture rate: %.1f fps%s", fps_count / (now - fps_t0), extra)
+                    logger.info("%s capture rate: %.1f fps%s", self.label, fps_count / (now - fps_t0), extra)
                     fps_count = 0
                     fps_t0 = now
         finally:

@@ -53,4 +53,4 @@ from .teleop_dds import (  # noqa: F401  (DDS Joy_ layout, not an Envelope body)
     encode_motion_feedback,
     encode_recording_state,
 )
-from .video import VideoFrameMsg, build_video_frame_payload, decode_video_frame  # noqa: F401
+from .video import VideoFrameMsg, VideoStream, build_video_frame_payload, decode_video_frame  # noqa: F401

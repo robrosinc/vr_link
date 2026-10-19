@@ -147,3 +147,21 @@ def test_motion_feedback_needs_dds_and_names_its_topic(tmp_path):
 def test_packaged_configs_read_the_motion_feedback_from_dds(kind):
     cfg = config.load_pump_config(config.default_config_path(kind), kind)
     assert cfg.signals.motion_feedback == "dds" and cfg.needs_dds()
+
+
+def test_head_rgb_defaults_off_and_its_section_parses(tmp_path):
+    for kind in config.SOURCE_KINDS:
+        cfg = config.load_pump_config(config.default_config_path(kind), kind)
+        assert not cfg.head_rgb.enable and cfg.head_rgb.camera_topic == "sensor/d435_color/compressed"
+    isaac = config.load_pump_config(config.packaged_path("configs/stream_dds_isaac.yaml"), "dds")
+    assert not isaac.head_rgb.enable and (isaac.head_rgb.width, isaac.head_rgb.height, isaac.head_rgb.fps) == (640, 480, 15.0)
+    path = tmp_path / "s.yaml"
+    path.write_text("head_rgb: {enable: true, camera_topic: cam/head, frame_id: d435_color, resolution: [320, 240], fps: 10, bitrate: 1M, gop: 5}\n", encoding="utf-8")
+    cfg = config.load_pump_config(path, "usb")
+    head = cfg.head_rgb
+    assert head.enable and head.camera_topic == "cam/head" and head.frame_id == "d435_color"
+    assert (head.width, head.height, head.fps, head.bitrate, head.gop) == (320, 240, 10.0, 1_000_000, 5)
+    assert cfg.needs_dds()  # the head camera is a DDS topic even for a USB stereo source
+    path.write_text("head_rgb: {resolution: [640]}\n", encoding="utf-8")
+    with pytest.raises(config.ConfigError):
+        config.load_pump_config(path, "usb")

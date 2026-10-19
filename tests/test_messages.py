@@ -17,6 +17,7 @@ from vr_link.messages import (
     decode_robot_state,
     decode_video_frame,
     parse_envelope,
+    VideoStream,
 )
 from vr_link.messages.robot_state import vector
 
@@ -92,3 +93,13 @@ def test_video_frame_round_trip():
     assert frame.data == au
     with pytest.raises(ValueError):
         build_video_frame_payload(b"", is_key=False, width=1, height=1, seq=0, wall_ns=0)
+    assert frame.stream_id is VideoStream.EYES_STEREO  # the default, what pre-2.2 senders produce
+
+
+def test_video_frame_stream_id_round_trips_and_rejects_unknown_streams():
+    env = parse_envelope(build_video_frame_payload(b"au", is_key=False, width=640, height=480, seq=1, wall_ns=2, stream_id=VideoStream.HEAD_RGB))
+    frame = decode_video_frame(env)
+    assert frame.stream_id is VideoStream.HEAD_RGB and frame.stream_id == 1 and (frame.width, frame.height) == (640, 480)
+    assert decode_video_frame(parse_envelope(build_video_frame_payload(b"au", is_key=True, width=1, height=1, seq=0, wall_ns=0, stream_id=0))).stream_id is VideoStream.EYES_STEREO
+    with pytest.raises(ValueError):
+        build_video_frame_payload(b"au", is_key=True, width=1, height=1, seq=0, wall_ns=0, stream_id=7)
