@@ -209,6 +209,12 @@ def test_head_rgb_pump_sends_only_tagged_video_records(sw_available):
         with socket.create_connection(("127.0.0.1", server.port), timeout=5.0) as conn:
             conn.settimeout(5.0)
             client = EnvelopeClient(conn)
+            # The pump drops frames until the accept thread has attached the client;
+            # with only 4 frames, start it once the server reports the connection.
+            deadline = time.monotonic() + 5.0
+            while not server.client_connected and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert server.client_connected
             thread.start()
             envs = [client.next() for _ in range(2)]
             assert [e.kind for e in envs] == [MessageKind.VIDEO_FRAME] * 2

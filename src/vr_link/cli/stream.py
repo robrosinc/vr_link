@@ -173,21 +173,20 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p.add_argument("--dds-namespace", default=None, help="override dds.namespace")
     p.add_argument("--dds-domain", type=int, default=None, help="override dds.domain_id")
     p.add_argument("--max-fps", type=float, default=None, help="pace the stream to this rate (default: source rate)")
+    p.add_argument(
+        "--head-rgb", choices=("on", "off"), default=None,
+        help="override head_rgb.enable: the second video stream (VideoFrame.stream_id = HeadRgb) from the head "
+        "colour camera's DDS topic; needs a headset build that demultiplexes stream_id",
+    )
     p.add_argument("-v", "--verbose", action="store_true", help="log every packet")
     args = p.parse_args(argv)
     args.source = normalize_source_kind(args.source)
     return args
 
 
-def main(argv: Optional[Sequence[str]] = None) -> None:
-    args = parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    config_path = resolve_config_path(args.config, args.source)
-    logger.info("Loading config from %s", config_path)
-    cfg = load_pump_config(config_path, args.source)
-    if not cfg.enable_stereo:
-        logger.info("eyes_stereo disabled by config; nothing to stream")
-        return
+def apply_overrides(cfg: PumpConfig, args: argparse.Namespace) -> PumpConfig:
+    """Command-line overrides on top of the config file (None = keep the file's value)."""
+
     if args.port is not None:
         cfg.stream.port = args.port
     if args.calibration_port is not None:
@@ -200,6 +199,20 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         cfg.dds.namespace = args.dds_namespace
     if args.dds_domain is not None:
         cfg.dds.domain_id = args.dds_domain
+    if args.head_rgb is not None:
+        cfg.head_rgb.enable = args.head_rgb == "on"
+    return cfg
+
+
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    args = parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    config_path = resolve_config_path(args.config, args.source)
+    logger.info("Loading config from %s", config_path)
+    cfg = apply_overrides(load_pump_config(config_path, args.source), args)
+    if not cfg.enable_stereo:
+        logger.info("eyes_stereo disabled by config; nothing to stream")
+        return
     if cfg.needs_dds() and not cfg.dds.namespace:
         raise SystemExit("dds.namespace is required (config or --dds-namespace)")
 

@@ -322,6 +322,7 @@ vr-link-stream --source usb   [--config stream_usb.yaml]  --dds-namespace igris_
 vr-link-stream --source dds   [--config stream_dds.yaml]  --dds-namespace igris_c_XXXX   igris_c_camera DDS topic + robot DDS state
 vr-link-stream --source dds   --config stream_dds_mujoco.yaml --dds-namespace igris_c_XXXX  MuJoCo publishing the same DDS contract (ideal calibration from the file)
 vr-link-stream --source shm   [--config stream_shm.yaml]                                simulator segment (video + state)
+    any mode: --head-rgb on|off   overrides head_rgb.enable (second video stream, VideoFrame.stream_id = HeadRgb; new headset build only)
 ```
 
 Config schema (`src/vr_link/configs/*.yaml`; `--config` >
