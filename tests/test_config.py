@@ -76,12 +76,22 @@ def test_relative_paths_resolve_against_the_config_file(tmp_path):
     "signals: {source: hologram}\n",
     "signals: {recording: tape}\n",
     "dds: {namespace: n, topic_naming: ros}\n",
+    "eyes_stereo: {left_half: top}\n",
 ])
 def test_invalid_values_are_rejected(tmp_path, text):
     path = tmp_path / "stream.yaml"
     path.write_text(text, encoding="utf-8")
     with pytest.raises(config.ConfigError):
         config.load_pump_config(path, "usb")
+
+
+@pytest.mark.parametrize("kind", ["usb", "shm"])
+def test_left_half_defaults_to_the_right_eye_in_the_left_half(tmp_path, kind):
+    path = tmp_path / "stream.yaml"
+    path.write_text("eyes_stereo: {cam_index: 2}\n", encoding="utf-8")
+    assert config.load_pump_config(path, kind).stream.left_half == "right"
+    path.write_text("eyes_stereo: {left_half: LEFT}\n", encoding="utf-8")
+    assert config.load_pump_config(path, kind).stream.left_half == "left"
 
 
 def test_dds_recording_flag_needs_dds_and_names_its_topic(tmp_path):

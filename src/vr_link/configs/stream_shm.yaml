@@ -10,6 +10,10 @@ eyes_stereo:
   resolution: [1280, 480]   # informational; the segment header is authoritative
   fps: 30
   enable_stereo: true
+  # The eye the producer puts in the LEFT half of the segment. The stream sends
+  # the left eye in the left half (the layout igris_c_camera publishes over DDS),
+  # so "right" (the vision_shm.h contract) swaps the halves before encoding.
+  left_half: right
 
 tcp:
   host: "0.0.0.0"

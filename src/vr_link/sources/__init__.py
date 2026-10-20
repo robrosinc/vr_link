@@ -1,12 +1,16 @@
 """Stereo frame sources feeding the video pump.
 
-A source delivers side-by-side (SBS) stereo frames, right eye in the LEFT
-half (the hardware ``left_half: right`` convention every consumer assumes),
-as one :class:`Frame` per call. Sources differ only in where pixels come
-from: a USB camera (:mod:`vr_link.sources.usb`), the igris_c_mujoco vision
-shared-memory segment (:mod:`vr_link.sources.shm`, layout owned by
+A source delivers side-by-side (SBS) stereo frames, left eye in the LEFT
+half (the layout igris_c_camera publishes over DDS and the headset renders
+as-is), as one :class:`Frame` per call. Sources differ only in where pixels
+come from: a USB camera (:mod:`vr_link.sources.usb`), the igris_c_mujoco
+vision shared-memory segment (:mod:`vr_link.sources.shm`, layout owned by
 ``include/vr_link/vision_shm.h``; MuJoCo today, Isaac later) or the robot's
-DDS image topic (:mod:`vr_link.sources.dds_camera`).
+DDS image topic (:mod:`vr_link.sources.dds_camera`). The USB hardware and
+the simulator segment put the RIGHT eye in the left half; those two sources
+take ``left_half`` (``eyes_stereo.left_half``, default ``"right"``) and swap
+the halves with :func:`swap_sbs_halves` so every source delivers the same
+layout.
 
 Importing this package pulls in numpy only; each concrete source imports its
 own backend (cv2, mmap, igris_c_sdk) lazily in ``open()``.
@@ -20,6 +24,23 @@ from typing import Literal, Optional, Protocol, Tuple, runtime_checkable
 import numpy as np
 
 PixelFormat = Literal["rgb24", "bgr24"]
+
+LEFT_HALF_VALUES = ("left", "right")
+
+
+def check_left_half(value: str) -> str:
+    """Validate a ``left_half`` setting (the eye a device puts in the left half of its SBS frame)."""
+
+    if value not in LEFT_HALF_VALUES:
+        raise ValueError(f"left_half must be 'left' or 'right', got {value!r}")
+    return value
+
+
+def swap_sbs_halves(pixels: np.ndarray) -> np.ndarray:
+    """Exchange the two halves of an SBS frame (split at ``width // 2``, like igris_c_camera)."""
+
+    midpoint = pixels.shape[1] // 2
+    return np.concatenate((pixels[:, midpoint:], pixels[:, :midpoint]), axis=1)
 
 
 @dataclass
@@ -149,6 +170,7 @@ class FrameSource(Protocol):
 
 
 __all__ = [
-    "Frame", "FrameSource", "PixelFormat", "ShmRobotBlock", "StereoCameraMetadata",
+    "Frame", "FrameSource", "LEFT_HALF_VALUES", "PixelFormat", "ShmRobotBlock", "StereoCameraMetadata",
+    "check_left_half", "swap_sbs_halves",
     "STATE_FLAG_RECORDING", "STATE_VALID_BASE_POSE", "STATE_VALID_BODY_ACTUAL", "STATE_VALID_HAND_ACTUAL", "STATE_VALID_RECORDING",
 ]

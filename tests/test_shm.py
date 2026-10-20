@@ -24,14 +24,37 @@ ROBOT = ShmRobotBlock(
 )
 
 
-def _segment(path, *, version, seq, index, stamp=123, sim=456, fill=7, robot=None):
+def _segment(path, *, version, seq, index, stamp=123, sim=456, fill=7, robot=None, right_fill=None):
     header = shm.pack_shm_header(
         version=version, seq=seq, width=W, height=H, stamp_realtime_ns=stamp, sim_time_ns=sim,
         frame_index=index, metadata=META if version >= 2 else None, robot=robot,
     )
-    pixels = np.full((H, W, 3), fill, dtype=np.uint8).tobytes()
-    path.write_bytes(header + pixels)
+    pixels = np.full((H, W, 3), fill, dtype=np.uint8)
+    if right_fill is not None:
+        pixels[:, W // 2 :] = right_fill
+    path.write_bytes(header + pixels.tobytes())
     return path
+
+
+def test_halves_are_swapped_for_a_right_eye_left_producer(tmp_path):
+    # The segment holds the right eye in the left half; the stream wants the left eye there.
+    path = _segment(tmp_path / "seg", version=2, seq=2, index=1, fill=10, right_fill=20)
+    source = shm.ShmSource(path=path, poll_sec=0.001, retry_sec=0.01)  # left_half defaults to "right"
+    source.open()
+    try:
+        frame = source.read(timeout=0.5)
+        assert (frame.pixels[:, : W // 2] == 20).all() and (frame.pixels[:, W // 2 :] == 10).all()
+    finally:
+        source.close()
+    source = shm.ShmSource(path=path, poll_sec=0.001, retry_sec=0.01, left_half="left")
+    source.open()
+    try:
+        frame = source.read(timeout=0.5)
+        assert (frame.pixels[:, : W // 2] == 10).all() and (frame.pixels[:, W // 2 :] == 20).all()
+    finally:
+        source.close()
+    with pytest.raises(ValueError):
+        shm.ShmSource(path=path, left_half="top")
 
 
 def test_header_formats_have_the_documented_sizes():

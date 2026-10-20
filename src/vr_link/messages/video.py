@@ -21,7 +21,7 @@ class VideoStream(enum.IntEnum):
     ``EYES_STEREO`` only.
     """
 
-    EYES_STEREO = _vr_link.VideoStream.EyesStereo  # side-by-side eyes, right eye in the left half
+    EYES_STEREO = _vr_link.VideoStream.EyesStereo  # side-by-side eyes, left eye in the left half
     HEAD_RGB = _vr_link.VideoStream.HeadRgb  # head colour camera (D435), no state records attached
 
 

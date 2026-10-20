@@ -6,7 +6,9 @@ the LEFT half, like the hardware) into a POSIX shared-memory segment
 ``include/vr_link/vision_shm.h``) under a seqlock. This
 source mmaps the segment, accepts a frame only when ``seq`` is even and
 unchanged across the pixel copy, and skips frames superseded before they
-are consumed (latest-only, low latency).
+are consumed (latest-only, low latency). With ``left_half="right"`` (the
+default, matching the segment contract) the halves are swapped so the
+delivered frame has the left eye in the left half like every other source.
 
 Three header layouts are understood; the layout version is the low byte of
 the magic (``'MJV' | version``):
@@ -41,7 +43,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from . import Frame, ShmRobotBlock, StereoCameraMetadata
+from . import Frame, ShmRobotBlock, StereoCameraMetadata, check_left_half, swap_sbs_halves
 from ..messages.robot_state import BODY_JOINT_COUNT, HAND_MOTOR_COUNT
 
 logger = logging.getLogger(__name__)
@@ -217,10 +219,12 @@ class ShmSource:
         path: Optional[Path] = None,
         poll_sec: float = DEFAULT_POLL_SEC,
         retry_sec: float = DEFAULT_RETRY_SEC,
+        left_half: str = "right",
     ) -> None:
         self.path = Path(path) if path is not None else Path(shm_dir) / shm_name.lstrip("/")
         self.poll_sec = float(poll_sec)
         self.retry_sec = float(retry_sec)
+        self.left_half = check_left_half(left_half)
         self._fd: Optional[int] = None
         self._mm: Optional[mmap.mmap] = None
         self._inode: Optional[int] = None
@@ -389,8 +393,11 @@ class ShmSource:
                     self._last_index = header.frame_index
                     self._header = header
                     stamp_ns = header.stamp_realtime_ns or time.clock_gettime_ns(time.CLOCK_REALTIME)
+                    pixels = pixels.reshape(header.height, header.width, SHM_CHANNELS)
+                    if self.left_half == "right":
+                        pixels = swap_sbs_halves(pixels)
                     return Frame(
-                        pixels=pixels.reshape(header.height, header.width, SHM_CHANNELS),
+                        pixels=pixels,
                         pixel_format="rgb24",
                         capture_ns=int(stamp_ns),
                         sim_ns=int(header.sim_time_ns),

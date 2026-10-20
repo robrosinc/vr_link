@@ -8,7 +8,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from . import Frame, StereoCameraMetadata
+from . import Frame, StereoCameraMetadata, check_left_half, swap_sbs_halves
 from .v4l2 import apply_stereo_tuning, init_manual
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,12 @@ class UsbStereoSource:
     High-resolution USB cameras only reach full rate in MJPG; raw YUYV
     saturates the bus. Frames are resized to the configured size when the
     driver negotiates something else, so the encoded size is deterministic.
+
+    ``left_half`` names the eye the device puts in the left half of its frame.
+    The delivered frame always has the left eye in the left half (the layout
+    igris_c_camera publishes over DDS), so ``"right"`` (the eyes_stereo
+    hardware) swaps the two halves, exactly as igris_c_camera's stereo worker
+    does before publishing.
     """
 
     def __init__(
@@ -31,7 +37,9 @@ class UsbStereoSource:
         *,
         fourcc: str = "MJPG",
         apply_tuning: bool = True,
+        left_half: str = "right",
     ) -> None:
+        self.left_half = check_left_half(left_half)
         self.device = str(device)
         self.width = int(width)
         self.height = int(height)
@@ -99,6 +107,8 @@ class UsbStereoSource:
         capture_ns = time.clock_gettime_ns(time.CLOCK_REALTIME)
         if pixels.shape[1] != self.width or pixels.shape[0] != self.height:
             pixels = cv2.resize(pixels, (self.width, self.height))
+        if self.left_half == "right":
+            pixels = swap_sbs_halves(pixels)
         self._index += 1
         return Frame(pixels=np.ascontiguousarray(pixels), pixel_format="bgr24", capture_ns=capture_ns, sim_ns=None, index=self._index)
 

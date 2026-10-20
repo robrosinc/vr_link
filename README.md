@@ -53,7 +53,7 @@ headset without video (NO CAMERA mode) still gets the recording / convergence
 
 | Body | Content |
 |---|---|
-| `VideoFrame` | one H.264 Annex-B access unit of one video stream (`codec=1`, `width`/`height` of the frame, `is_key`, `data`, `stream_id: VideoStream {EyesStereo, HeadRgb}`). `EyesStereo` (0, the default and the only stream before 2.2) is the SBS frame with the right eye in the LEFT half; `HeadRgb` (1) is the head colour camera (D435, 640x480) and carries no `Signals`/`RobotState`. Each stream is an independent H.264 sequence: SPS/PPS repeated on every IDR, nothing is sent on a stream to a new connection before that stream's first IDR, and a receiver keeps one decoder per stream. The sender queues a stereo frame's three records atomically, so a head frame never splits them. |
+| `VideoFrame` | one H.264 Annex-B access unit of one video stream (`codec=1`, `width`/`height` of the frame, `is_key`, `data`, `stream_id: VideoStream {EyesStereo, HeadRgb}`). `EyesStereo` (0, the default and the only stream before 2.2) is the SBS frame with the left eye in the LEFT half (igris_c_camera publishes that layout over DDS; the `usb` and `shm` sources swap the right-eye-left halves of the hardware and of the simulator segment to match, `eyes_stereo.left_half`); `HeadRgb` (1) is the head colour camera (D435, 640x480) and carries no `Signals`/`RobotState`. Each stream is an independent H.264 sequence: SPS/PPS repeated on every IDR, nothing is sent on a stream to a new connection before that stream's first IDR, and a receiver keeps one decoder per stream. The sender queues a stereo frame's three records atomically, so a head frame never splits them. |
 | `Calibration` | per-eye `image_width`/`image_height` and `left`/`right` `CameraModel {fx fy cx cy k1 k2 k3 k4 r[9]}` (see "Calibration contract"). Sent once per 9100 connection (newest wins on the headset) and as the 9101 reply. |
 | `CalibrationRequest` | empty; the 9101 request body. |
 | `RobotState` | frame-matched joint state, four groups each with `*_valid` and `*_stamp_ns`: `body_actual[31]` (LowState), `body_reference[31]` (`gmr/refstate`), `hand_actual[12]` (HandState), `hand_command[12]` (`handcmd`), plus `base_pose: Pose` (valid only from simulators). An invalid group is an empty vector and must be ignored; a group the sender could not match within tolerance is invalid, never stale. |
@@ -198,7 +198,7 @@ copy only if `seq` is even and unchanged.
 | 0..48 | v1: `magic` (`'MJV'<<8 \| version`), `seq`, `width`, `height`, `channels`, `step`, `stamp_realtime_ns`, `sim_time_ns`, `frame_index` |
 | 48..128 | v2: static per-eye camera model (left/right `fovy_deg`, `pos[3]`, `quat_wxyz[4]`, `baseline_m`, `eye_width`, `eye_height`) -> ideal calibration on request |
 | 128..384 | v3: robot state written with each frame: `state_stamp_realtime_ns`, `state_sim_time_ns`, `state_valid` bits (body_actual, hand_actual, base_pose, recording-flag-valid), `body_joint_count=31`, `hand_motor_count=12`, `state_flags` (recording), `body_actual[31]`, `hand_actual[12]`, `base_pose[7]` |
-| 384.. | RGB8 pixels, SBS, right eye in the left half |
+| 384.. | RGB8 pixels, SBS, right eye in the left half (the reader swaps the halves before encoding) |
 
 The reader accepts v1 (64 B), v2 (128 B) and v3 (384 B) producers; without a
 v3 producer the SHM-sourced `RobotState` groups are simply invalid.

@@ -7,13 +7,17 @@
 
 eyes_stereo:
   cam_index: "/dev/eyes_stereo"
-  # Side-by-side, right eye in the left half. 1280x480 = 640x480 per eye (4:3),
-  # the mode shared with the simulators. The served calibration must be
-  # measured in this same mode (vr-link-capture-checkerboard defaults to it).
+  # Side-by-side, 1280x480 = 640x480 per eye (4:3), the mode shared with the
+  # simulators. The served calibration must be measured in this same mode
+  # (vr-link-capture-checkerboard defaults to it).
   resolution: [1280, 480]
   fps: 30
   enable_stereo: true
   apply_tuning: true        # camera_image_stream.cpp tone settings via V4L2
+  # The eye the device puts in the LEFT half of its frame. The stream sends the
+  # left eye in the left half (the layout igris_c_camera publishes over DDS), so
+  # "right" (the eyes_stereo hardware) swaps the halves before encoding.
+  left_half: right
 
 tcp:
   host: "0.0.0.0"

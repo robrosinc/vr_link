@@ -3,7 +3,7 @@
 The YAML keeps the layout of the legacy ``igris_c_camera`` ``stream_config*.yaml``
 and adds the robot-state sources::
 
-    eyes_stereo: {cam_index, resolution: [w, h], fps, enable_stereo, apply_tuning}
+    eyes_stereo: {cam_index, resolution: [w, h], fps, enable_stereo, apply_tuning, left_half}
     tcp:         {host, port, bitrate, gop, fourcc, encoder}
     head_rgb:    {enable, camera_topic, frame_id, resolution: [w, h], fps, bitrate, gop}
     calibration: {enable, host, port, provider, yaml, json, image_width, image_height,
@@ -40,6 +40,7 @@ from typing import Any, Dict, Mapping, Optional, Union
 
 from ..messages.signals import SourceKind
 from ..network.dds.subscribers import DdsStateTopics
+from ..sources import LEFT_HALF_VALUES
 from ..video.encoder import normalize_encoder_name, parse_bitrate
 from .robot_state import MatchTolerances, RobotStateSpec, SignalsSpec
 
@@ -141,6 +142,10 @@ class StreamConfig:
     width: int = 1280
     height: int = 480
     fps: float = 30.0
+    # Which eye the capture device (USB camera, simulator segment) puts in the LEFT half
+    # of its SBS frame. The stream always carries the left eye in the left half (what
+    # igris_c_camera publishes over DDS), so "right" makes the source swap the halves.
+    left_half: str = "right"
 
 
 @dataclass
@@ -297,9 +302,12 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
     if not isinstance(resolution, (list, tuple)) or len(resolution) != 2:
         raise ConfigError("eyes_stereo.resolution must be [width, height]")
     fps = float(eyes.get("fps", 30))
+    left_half = str(eyes.get("left_half", "right")).lower()
+    if left_half not in LEFT_HALF_VALUES:
+        raise ConfigError(f"eyes_stereo.left_half must be left or right, got {left_half!r}")
     stream = StreamConfig(
         host=str(tcp.get("host", "0.0.0.0")), port=int(tcp.get("port", 9100)),
-        width=int(resolution[0]), height=int(resolution[1]), fps=fps,
+        width=int(resolution[0]), height=int(resolution[1]), fps=fps, left_half=left_half,
     )
     encoder = EncoderConfig(
         codec=normalize_encoder_name(str(tcp.get("encoder", "sw"))),
