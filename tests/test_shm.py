@@ -36,25 +36,16 @@ def _segment(path, *, version, seq, index, stamp=123, sim=456, fill=7, robot=Non
     return path
 
 
-def test_halves_are_swapped_for_a_right_eye_left_producer(tmp_path):
-    # The segment holds the right eye in the left half; the stream wants the left eye there.
+def test_pixels_are_passed_through_unchanged(tmp_path):
+    # The segment contract is left eye in the left half; the reader does not reorder anything.
     path = _segment(tmp_path / "seg", version=2, seq=2, index=1, fill=10, right_fill=20)
-    source = shm.ShmSource(path=path, poll_sec=0.001, retry_sec=0.01)  # left_half defaults to "right"
-    source.open()
-    try:
-        frame = source.read(timeout=0.5)
-        assert (frame.pixels[:, : W // 2] == 20).all() and (frame.pixels[:, W // 2 :] == 10).all()
-    finally:
-        source.close()
-    source = shm.ShmSource(path=path, poll_sec=0.001, retry_sec=0.01, left_half="left")
+    source = shm.ShmSource(path=path, poll_sec=0.001, retry_sec=0.01)
     source.open()
     try:
         frame = source.read(timeout=0.5)
         assert (frame.pixels[:, : W // 2] == 10).all() and (frame.pixels[:, W // 2 :] == 20).all()
     finally:
         source.close()
-    with pytest.raises(ValueError):
-        shm.ShmSource(path=path, left_half="top")
 
 
 def test_header_formats_have_the_documented_sizes():

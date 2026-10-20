@@ -2,8 +2,7 @@
 import numpy as np
 import pytest
 
-from vr_link.sources import swap_sbs_halves
-from vr_link.sources.usb import UsbStereoSource
+from vr_link.sources.usb import UsbStereoSource, swap_sbs_halves
 
 W, H = 8, 4
 

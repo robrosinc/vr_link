@@ -85,13 +85,13 @@ def test_invalid_values_are_rejected(tmp_path, text):
         config.load_pump_config(path, "usb")
 
 
-@pytest.mark.parametrize("kind", ["usb", "shm"])
-def test_left_half_defaults_to_the_right_eye_in_the_left_half(tmp_path, kind):
+def test_usb_left_half_defaults_to_the_hardware_layout(tmp_path):
+    # The eyes_stereo USB hardware has the right eye in its left half, so the source swaps by default.
     path = tmp_path / "stream.yaml"
     path.write_text("eyes_stereo: {cam_index: 2}\n", encoding="utf-8")
-    assert config.load_pump_config(path, kind).stream.left_half == "right"
+    assert config.load_pump_config(path, "usb").usb.left_half == "right"
     path.write_text("eyes_stereo: {left_half: LEFT}\n", encoding="utf-8")
-    assert config.load_pump_config(path, kind).stream.left_half == "left"
+    assert config.load_pump_config(path, "usb").usb.left_half == "left"
 
 
 def test_dds_recording_flag_needs_dds_and_names_its_topic(tmp_path):

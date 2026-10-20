@@ -90,7 +90,7 @@ def build_source(cfg: PumpConfig, dds: Optional[DdsRuntime]) -> FrameSource:
 
         return UsbStereoSource(
             cfg.usb.device, cfg.stream.width, cfg.stream.height, cfg.stream.fps,
-            fourcc=cfg.usb.fourcc, apply_tuning=cfg.usb.apply_tuning, left_half=cfg.stream.left_half,
+            fourcc=cfg.usb.fourcc, apply_tuning=cfg.usb.apply_tuning, left_half=cfg.usb.left_half,
         )
     if cfg.source_kind == "dds":
         from vr_link.sources.dds_camera import DdsCameraSource
@@ -100,7 +100,7 @@ def build_source(cfg: PumpConfig, dds: Optional[DdsRuntime]) -> FrameSource:
     if cfg.source_kind == "shm":
         from vr_link.sources.shm import ShmSource
 
-        return ShmSource(cfg.shm.shm_name, left_half=cfg.stream.left_half)
+        return ShmSource(cfg.shm.shm_name)
     raise ValueError(f"unknown source kind {cfg.source_kind!r}")
 
 

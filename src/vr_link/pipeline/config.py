@@ -40,7 +40,7 @@ from typing import Any, Dict, Mapping, Optional, Union
 
 from ..messages.signals import SourceKind
 from ..network.dds.subscribers import DdsStateTopics
-from ..sources import LEFT_HALF_VALUES
+from ..sources.usb import LEFT_HALF_VALUES
 from ..video.encoder import normalize_encoder_name, parse_bitrate
 from .robot_state import MatchTolerances, RobotStateSpec, SignalsSpec
 
@@ -142,10 +142,6 @@ class StreamConfig:
     width: int = 1280
     height: int = 480
     fps: float = 30.0
-    # Which eye the capture device (USB camera, simulator segment) puts in the LEFT half
-    # of its SBS frame. The stream always carries the left eye in the left half (what
-    # igris_c_camera publishes over DDS), so "right" makes the source swap the halves.
-    left_half: str = "right"
 
 
 @dataclass
@@ -187,6 +183,10 @@ class UsbSourceConfig:
     device: str = "/dev/eyes_stereo"
     fourcc: str = "MJPG"
     apply_tuning: bool = True
+    # The eye the camera puts in the LEFT half of its SBS frame. The stream carries the
+    # left eye in the left half (what igris_c_camera publishes over DDS), so "right"
+    # (the eyes_stereo hardware) makes the source swap the halves.
+    left_half: str = "right"
 
 
 @dataclass
@@ -302,12 +302,9 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
     if not isinstance(resolution, (list, tuple)) or len(resolution) != 2:
         raise ConfigError("eyes_stereo.resolution must be [width, height]")
     fps = float(eyes.get("fps", 30))
-    left_half = str(eyes.get("left_half", "right")).lower()
-    if left_half not in LEFT_HALF_VALUES:
-        raise ConfigError(f"eyes_stereo.left_half must be left or right, got {left_half!r}")
     stream = StreamConfig(
         host=str(tcp.get("host", "0.0.0.0")), port=int(tcp.get("port", 9100)),
-        width=int(resolution[0]), height=int(resolution[1]), fps=fps, left_half=left_half,
+        width=int(resolution[0]), height=int(resolution[1]), fps=fps,
     )
     encoder = EncoderConfig(
         codec=normalize_encoder_name(str(tcp.get("encoder", "sw"))),
@@ -347,10 +344,14 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
         ),
     )
 
+    left_half = str(eyes.get("left_half", "right")).lower()
+    if left_half not in LEFT_HALF_VALUES:
+        raise ConfigError(f"eyes_stereo.left_half must be left or right, got {left_half!r}")
     usb = UsbSourceConfig(
         device=str(eyes.get("cam_index", "/dev/eyes_stereo")),
         fourcc=str(tcp.get("fourcc", "MJPG")),
         apply_tuning=bool(eyes.get("apply_tuning", True)),
+        left_half=left_half,
     )
 
     config_uri = dds.get("config_uri") or dds.get("config") or ""

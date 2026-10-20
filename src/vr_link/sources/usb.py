@@ -8,10 +8,19 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from . import Frame, StereoCameraMetadata, check_left_half, swap_sbs_halves
+from . import Frame, StereoCameraMetadata
 from .v4l2 import apply_stereo_tuning, init_manual
 
 logger = logging.getLogger(__name__)
+
+LEFT_HALF_VALUES = ("left", "right")
+
+
+def swap_sbs_halves(pixels: np.ndarray) -> np.ndarray:
+    """Exchange the two halves of an SBS frame (split at ``width // 2``, like igris_c_camera)."""
+
+    midpoint = pixels.shape[1] // 2
+    return np.concatenate((pixels[:, midpoint:], pixels[:, :midpoint]), axis=1)
 
 
 class UsbStereoSource:
@@ -39,7 +48,9 @@ class UsbStereoSource:
         apply_tuning: bool = True,
         left_half: str = "right",
     ) -> None:
-        self.left_half = check_left_half(left_half)
+        if left_half not in LEFT_HALF_VALUES:
+            raise ValueError(f"left_half must be 'left' or 'right', got {left_half!r}")
+        self.left_half = left_half
         self.device = str(device)
         self.width = int(width)
         self.height = int(height)
@@ -116,4 +127,4 @@ class UsbStereoSource:
         return None
 
 
-__all__ = ["UsbStereoSource"]
+__all__ = ["LEFT_HALF_VALUES", "UsbStereoSource", "swap_sbs_halves"]

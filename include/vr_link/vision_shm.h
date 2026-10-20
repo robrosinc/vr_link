@@ -1,9 +1,9 @@
 // vr_link vision shared-memory contract (layout v3).
 //
 // A simulator (igris_c_mujoco today, Isaac Sim later) renders the side-by-side
-// stereo frame (right eye in the LEFT half, like the hardware) into a POSIX
-// shared-memory segment and vr_link (`vr_link.sources.shm`) reads it, swapping
-// the halves so the stream carries the left eye in the left half. This
+// stereo frame (LEFT eye in the left half, the layout igris_c_camera publishes
+// for the real robot) into a POSIX shared-memory segment and vr_link
+// (`vr_link.sources.shm`) reads it. This
 // header is the single definition of the layout; the Python reader mirrors it
 // with struct format "<IIIIIIQQQff3f4f3f4ffII4xQQIIII31f12f7f24x" (384 bytes).
 //
