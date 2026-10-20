@@ -55,9 +55,13 @@ _CODEC_OPTIONS: Dict[str, Dict[str, str]] = {
         "preset": "ultrafast",
         "tune": "zerolatency",
         "forced-idr": "1",
-        # repeat-headers: SPS/PPS before every IDR; sliced-threads=0 keeps one
-        # slice (one VCL NAL) per frame; CBR smooths keyframe bit spikes.
-        "x264-params": "repeat-headers=1:bframes=0:sliced-threads=0:nal-hrd=cbr",
+        # repeat-headers: SPS/PPS before every IDR. sliced-threads=1 keeps the
+        # zerolatency slice threading so each frame's access unit leaves
+        # encode() in the same call; frame threading (sliced-threads=0) holds
+        # ~threads-1 frames (14 measured on a 16-core host) and desynchronises
+        # the pixels from the capture_ns/robot_state the pump attaches. CBR
+        # smooths keyframe bit spikes.
+        "x264-params": "repeat-headers=1:bframes=0:sliced-threads=1:nal-hrd=cbr",
     },
     "h264_nvenc": {
         "preset": "p1",
