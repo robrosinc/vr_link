@@ -27,6 +27,24 @@ def test_spec_validation_rejects_impossible_sources():
     assert RobotStateSpec().is_empty()
 
 
+def test_reference_topic_selects_the_subscription_key():
+    spec = RobotStateSpec(actual="dds", reference="dds", reference_topic="lowcmd").validate()
+    assert spec.dds_fields() == {"actual", "reference"} and not spec.is_empty()
+    assert spec.dds_subscriptions() == {"actual", "reference_lowcmd"}
+    assert RobotStateSpec(reference="dds").dds_subscriptions() == {"reference"}  # default refstate
+    assert RobotStateSpec(reference="none", reference_topic="lowcmd").dds_subscriptions() == set()
+    with pytest.raises(ValueError):
+        RobotStateSpec(reference="dds", reference_topic="handcmd").validate()
+    with pytest.raises(ValueError):
+        RobotStateSpec(reference="lowcmd").validate()  # a topic is not a source
+    # The assembler treats it like any DDS field: nearest sample within the reference tolerance.
+    buffers = DdsStateBuffers()
+    buffers.reference.push(T - 3 * MS, np.full(31, 0.25, np.float32))
+    sample = RobotStateAssembler(spec, dds=buffers).assemble(T)
+    assert sample.body_reference is not None and sample.body_reference.values[0] == pytest.approx(0.25)
+    assert sample.body_actual is None
+
+
 def test_dds_fields_match_nearest_within_tolerance_else_invalid():
     buffers = DdsStateBuffers()
     for stamp in (T - 20 * MS, T - 3 * MS, T + 4 * MS):

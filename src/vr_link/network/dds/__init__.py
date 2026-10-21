@@ -1,7 +1,7 @@
 """igris_c_sdk (CycloneDDS) access: import, channel singleton, subscribers and signal publishers.
 
 Robot-state inputs are subscriptions (lowstate, handstate, handcmd,
-gmr/refstate, the camera image topic). :mod:`.teleop` adds the teleop signal
+gmr/refstate or lowcmd for the reference group, the camera image topic). :mod:`.teleop` adds the teleop signal
 topics (``vr/controller``, ``recording/state``) as ``Joy_`` publishers and
 subscribers that any process holding an SDK participant can host. Robot
 control topics (lowcmd, handcmd, services) are never written here. The SDK
@@ -70,8 +70,10 @@ def sdk_type(sdk, name: str):
 
 from .channel import TOPIC_NAMINGS, DdsChannel, resolve_config_uri  # noqa: E402,F401
 from .subscribers import (  # noqa: E402,F401
+    REFERENCE_LOWCMD_KEY,
     DdsStateTopics,
     StampedSubscription,
+    body_cmd_q_by_id,
     header_stamp_ns,
     joint_state_q,
     motor_cmd_q_by_id,

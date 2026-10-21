@@ -9,7 +9,9 @@ Extractors turn one message into ``(stamp_ns, np.ndarray)``:
 
 * :func:`joint_state_q` for ``LowState_`` / ``MasterArmState_`` (31 joints);
 * :func:`motor_state_q` for ``HandState_`` (12 motors, positional order);
-* :func:`motor_cmd_q_by_id` for ``HandCmd_`` (12 motors reordered by ``id``).
+* :func:`motor_cmd_q_by_id` for ``HandCmd_`` (12 motors reordered by ``id``);
+* :func:`body_cmd_q_by_id` for ``LowCmd_`` (31 ``motors`` placed by ``id``, the
+  policy's final joint command; ``robot_state.reference_topic: lowcmd``).
 """
 
 from __future__ import annotations
@@ -87,6 +89,25 @@ def motor_cmd_q_by_id(ids: Sequence[int] = HAND_MOTOR_IDS) -> Extractor:
     return extract
 
 
+def body_cmd_q_by_id(count: int = BODY_JOINT_COUNT) -> Extractor:
+    """``LowCmd_.motors[*].q`` placed by motor ``id`` (0..count-1, the LowState joint order).
+
+    The inference node writes ``id = i`` for every joint; an id outside the
+    range is ignored and a missing id stays NaN, so the assembler drops the
+    sample instead of sending a partial command.
+    """
+
+    def extract(msg):
+        values = np.full(count, np.nan, dtype=np.float32)
+        for cmd in msg.motors():
+            slot = int(cmd.id())
+            if 0 <= slot < count:
+                values[slot] = cmd.q()
+        return _stamp_or_now(msg, "low_cmd"), values
+
+    return extract
+
+
 class StampedSubscription:
     """One SDK subscriber whose samples land in a ring buffer as ``(stamp_ns, vector)``."""
 
@@ -142,27 +163,32 @@ class DdsStateTopics:
     handstate: str = "handstate"
     handcmd: str = "handcmd"
     refstate: str = "gmr/refstate"
+    lowcmd: str = "lowcmd"  # the inference node's LowCmd_, read for body_reference with robot_state.reference_topic: lowcmd
     recording_state: str = "recording/state"  # teleop signal (messages.teleop_dds), read for Signals.recording
     motion_feedback: str = "teleop/motion_feedback"  # teleop producer feedback (messages.teleop_dds), read for Signals.converging / arm_hold_*
 
 
-# field name -> (message type, topic attribute, extractor factory)
-_FIELD_SUBSCRIPTIONS: Dict[str, Tuple[str, str, Callable[[], Extractor]]] = {
-    "actual": ("LowState", "lowstate", joint_state_q),
-    "reference": ("MasterArmState", "refstate", joint_state_q),
-    "hand_actual": ("HandState", "handstate", motor_state_q),
-    "hand_command": ("HandCmd", "handcmd", motor_cmd_q_by_id),
+# subscription key -> (message type, topic attribute, extractor factory, DdsStateBuffers field).
+# Keys are the RobotStateSpec field names, plus "reference_lowcmd" for the reference
+# group fed by LowCmd_ instead of MasterArmState_ (RobotStateSpec.dds_subscriptions()).
+REFERENCE_LOWCMD_KEY = "reference_lowcmd"
+_FIELD_SUBSCRIPTIONS: Dict[str, Tuple[str, str, Callable[[], Extractor], str]] = {
+    "actual": ("LowState", "lowstate", joint_state_q, "actual"),
+    "reference": ("MasterArmState", "refstate", joint_state_q, "reference"),
+    REFERENCE_LOWCMD_KEY: ("LowCmd", "lowcmd", body_cmd_q_by_id, "reference"),
+    "hand_actual": ("HandState", "handstate", motor_state_q, "hand_actual"),
+    "hand_command": ("HandCmd", "handcmd", motor_cmd_q_by_id, "hand_command"),
 }
 
 
 def start_state_subscriptions(channel: DdsChannel, topics: DdsStateTopics, buffers, *, needed: Set[str]) -> List[StampedSubscription]:
-    """Subscribe only the fields in ``needed`` (names as in RobotStateSpec); returns the started subscriptions."""
+    """Subscribe only the keys in ``needed`` (``RobotStateSpec.dds_subscriptions()``); returns the started subscriptions."""
 
     started: List[StampedSubscription] = []
     try:
         for name in sorted(needed):
-            type_name, topic_attr, make_extractor = _FIELD_SUBSCRIPTIONS[name]
-            sub = StampedSubscription(channel, type_name, getattr(topics, topic_attr), make_extractor(), buffers.get(name))
+            type_name, topic_attr, make_extractor, buffer_name = _FIELD_SUBSCRIPTIONS[name]
+            sub = StampedSubscription(channel, type_name, getattr(topics, topic_attr), make_extractor(), buffers.get(buffer_name))
             sub.start()
             started.append(sub)
     except Exception:
@@ -175,7 +201,9 @@ def start_state_subscriptions(channel: DdsChannel, topics: DdsStateTopics, buffe
 __all__ = [
     "DdsStateTopics",
     "Extractor",
+    "REFERENCE_LOWCMD_KEY",
     "StampedSubscription",
+    "body_cmd_q_by_id",
     "header_stamp_ns",
     "joint_state_q",
     "motor_cmd_q_by_id",

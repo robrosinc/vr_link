@@ -56,13 +56,14 @@ headset without video (NO CAMERA mode) still gets the recording / convergence
 | `VideoFrame` | one H.264 Annex-B access unit of one video stream (`codec=1`, `width`/`height` of the frame, `is_key`, `data`, `stream_id: VideoStream {EyesStereo, HeadRgb}`). `EyesStereo` (0, the default and the only stream before 2.2) is the SBS frame with the left eye in the LEFT half (igris_c_camera and the simulators publish that layout; the `usb` source swaps the hardware's right-eye-left halves to match, `eyes_stereo.left_half`); `HeadRgb` (1) is the head colour camera (D435, 640x480) and carries no `Signals`/`RobotState`. Each stream is an independent H.264 sequence: SPS/PPS repeated on every IDR, nothing is sent on a stream to a new connection before that stream's first IDR, and a receiver keeps one decoder per stream. The sender queues a stereo frame's three records atomically, so a head frame never splits them. |
 | `Calibration` | per-eye `image_width`/`image_height` and `left`/`right` `CameraModel {fx fy cx cy k1 k2 k3 k4 r[9]}` (see "Calibration contract"). Sent once per 9100 connection (newest wins on the headset) and as the 9101 reply. |
 | `CalibrationRequest` | empty; the 9101 request body. |
-| `RobotState` | frame-matched joint state, four groups each with `*_valid` and `*_stamp_ns`: `body_actual[31]` (LowState), `body_reference[31]` (`gmr/refstate`), `hand_actual[12]` (HandState), `hand_command[12]` (`handcmd`), plus `base_pose: Pose` (valid only from simulators). An invalid group is an empty vector and must be ignored; a group the sender could not match within tolerance is invalid, never stale. |
+| `RobotState` | frame-matched joint state, four groups each with `*_valid` and `*_stamp_ns`: `body_actual[31]` (LowState), `body_reference[31]` (the inference node's final `LowCmd` command with `robot_state.reference_topic: lowcmd`, the default of every packaged config since 2026-10-21, or the producer's retargeted `gmr/refstate` with `reference_topic: refstate`), `hand_actual[12]` (HandState), `hand_command[12]` (`handcmd`), plus `base_pose: Pose` (valid only from simulators). An invalid group is an empty vector and must be ignored; a group the sender could not match within tolerance is invalid, never stale. |
 | `Signals` | `recording` (episode recording active on the PC side) and `source: SourceKind {Unknown, Robot, MuJoCo, Isaac}` for the HUD label. Replaces 1.x `SimStatus`. Since 2.1 also the producer's motion feedback: `converging` (the robot reference is still ramping from the robot's measured pose to the operator after Start / Resume / low-level entry), `converge_progress` (0..1, meaningful only while `converging`), `arm_hold_left` / `arm_hold_right` (that arm is frozen because its bare hand is untracked). All default false / 0 from senders without the fields. |
 
 ### Joint orders
 
 - `body_*`: 31 radians in the igris_c_sdk **joint-space** order (the order of
-  `LowState.joint_state`, `gmr/refstate` and the MJCF serial actuators):
+  `LowState.joint_state`, `LowCmd.motors` by `id`, `gmr/refstate` and the MJCF
+  serial actuators):
   `waist_yaw waist_roll waist_pitch`, left leg `hip_pitch hip_roll hip_yaw
   knee_pitch ankle_pitch ankle_roll`, right leg (same), left arm
   `shoulder_pitch shoulder_roll shoulder_yaw elbow_pitch wrist_yaw wrist_roll
@@ -265,7 +266,8 @@ Layout:
   `static_provider`, `LatestValueProvider`); `request_calibration()` client.
 - `vr_link.network.dds` — `DdsChannel` (process-wide `ChannelFactory`),
   `StampedSubscription` + extractors for `LowState_`, `MasterArmState_`
-  (`gmr/refstate`), `HandState_`, `HandCmd_`, and
+  (`gmr/refstate`), `LowCmd_` (`lowcmd`, the reference group with
+  `robot_state.reference_topic: lowcmd`), `HandState_`, `HandCmd_`, and
   `start_state_subscriptions(...)`; `teleop` with the `Joy_` publishers and
   latest-value subscribers for `vr/controller`, `recording/state` and
   `teleop/motion_feedback`.
@@ -339,11 +341,11 @@ calibration: {enable, host, port: 9101, provider: yaml|json|ideal_from_source|id
               ideal: {model: pinhole|fisheye_equidistant, fovy_deg, focal_px, cx, cy, toe_out_deg, baseline_mm}}
 dds:         {domain_id, namespace, topic_naming: native|ros_compatible, config_uri,
               camera_topic, frame_id,
-              topics: {lowstate, handstate, handcmd, refstate, recording_state, motion_feedback},
+              topics: {lowstate, handstate, handcmd, refstate, lowcmd, recording_state, motion_feedback},
               buffer_capacity}
 shm:         {shm_name, read_timeout_sec}
-robot_state: {actual: dds|shm|none, reference: dds|none, hand_actual: dds|shm|none,
-              hand_command: dds|none, base_pose: shm|none,
+robot_state: {actual: dds|shm|none, reference: dds|none, reference_topic: refstate|lowcmd,
+              hand_actual: dds|shm|none, hand_command: dds|none, base_pose: shm|none,
               tolerances_ms: {actual: 5, reference: 15, hand_actual: 40, hand_command: 40}}
 signals:     {source: robot|mujoco|isaac|unknown, recording: shm|dds|none, motion_feedback: dds|none}
 ```

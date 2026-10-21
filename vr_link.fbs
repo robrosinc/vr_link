@@ -193,7 +193,11 @@ table RobotState {
   body_actual_valid: bool;
   body_actual_stamp_ns: ulong;
 
-  body_reference: [float];         // gmr/refstate (MasterArmState.joint_state[i].q)
+  body_reference: [float];         // the sender's reference joints: the inference node's final
+                                   // command (LowCmd.motors[i].q, robot_state.reference_topic: lowcmd,
+                                   // the packaged default since 2026-10-21) or the producer's
+                                   // retargeted gmr/refstate (MasterArmState.joint_state[i].q,
+                                   // reference_topic: refstate)
   body_reference_valid: bool;
   body_reference_stamp_ns: ulong;
 

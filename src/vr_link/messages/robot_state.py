@@ -4,7 +4,10 @@ Joint order contract (also documented in vr_link.fbs):
 
 * ``body_*``: 31 radians in the igris_c_sdk joint-space order
   (:data:`BODY_SERIAL_JOINT_NAMES`), the order of ``LowState.joint_state``,
-  ``gmr/refstate`` and the MJCF serial actuators.
+  ``LowCmd.motors`` (by ``id``), ``gmr/refstate`` and the MJCF serial actuators.
+  ``body_reference`` is the inference node's final ``LowCmd`` by default
+  (``robot_state.reference_topic: lowcmd``) or the producer's retargeted
+  ``gmr/refstate`` (``reference_topic: refstate``); the receiver cannot tell which.
 * ``hand_*``: 12 values in motor-id order :data:`HAND_MOTOR_IDS`
   (11..16 right hand, 21..26 left hand).
 

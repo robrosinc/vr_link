@@ -6,7 +6,18 @@ import numpy as np
 import pytest
 
 from vr_link.network import dds as dds_pkg
-from vr_link.network.dds import DdsChannel, DdsStateTopics, StampedSubscription, header_stamp_ns, joint_state_q, motor_cmd_q_by_id, motor_state_q, start_state_subscriptions
+from vr_link.network.dds import (
+    REFERENCE_LOWCMD_KEY,
+    DdsChannel,
+    DdsStateTopics,
+    StampedSubscription,
+    body_cmd_q_by_id,
+    header_stamp_ns,
+    joint_state_q,
+    motor_cmd_q_by_id,
+    motor_state_q,
+    start_state_subscriptions,
+)
 from vr_link.pipeline.robot_state import DdsStateBuffers
 from vr_link.utils.time_sync import StampedRingBuffer
 
@@ -89,6 +100,20 @@ class _HandCmd:
         return self._cmds
 
 
+class _LowCmd:
+    """igris_c_sdk LowCmd_: header + 31 motors tagged by id (the inference node writes id = index)."""
+
+    def __init__(self, sec, nanosec, cmds):
+        self._header = _Header(sec, nanosec, "igris_c_inference_public")
+        self._motors = [_MotorCmd(i, q) for i, q in cmds]
+
+    def header(self):
+        return self._header
+
+    def motors(self):
+        return self._motors
+
+
 class _Qos:
     @staticmethod
     def SensorData():
@@ -143,7 +168,7 @@ def fake_sdk(monkeypatch):
     sdk.ChannelFactory = _Factory
     sdk.QosProfile = _Qos
     sdk.parse_topic_naming = lambda value: f"naming:{value}"
-    for name in ("LowState", "HandState", "HandCmd", "MasterArmState", "CompressedImage"):
+    for name in ("LowState", "LowCmd", "HandState", "HandCmd", "MasterArmState", "CompressedImage"):
         setattr(sdk, f"{name}_", object())
         setattr(sdk, f"{name}Subscriber", _make_subscriber_class(registry, f"{name}Subscriber"))
     monkeypatch.setitem(sys.modules, "igris_c_sdk", sdk)
@@ -196,6 +221,17 @@ def test_extractors_read_stamps_and_orders(fake_sdk):
     assert stamp > 1_600_000_000_000_000_000  # no header stamp -> receive time
 
 
+def test_body_cmd_extractor_places_motors_by_id(fake_sdk):
+    # LowCmd motors in a shuffled order land by id; the header stamp is the publish time.
+    cmd = _LowCmd(7, 500, [(i, 0.1 * i) for i in reversed(range(31))])
+    stamp, values = body_cmd_q_by_id()(cmd)
+    assert stamp == 7_000_000_500 and values.dtype == np.float32 and values.shape == (31,)
+    assert values[0] == pytest.approx(0.0) and values[30] == pytest.approx(3.0) and values[12] == pytest.approx(1.2)
+    # A missing id leaves NaN (the assembler then drops the sample); ids outside 0..30 are ignored.
+    _, partial = body_cmd_q_by_id()(_LowCmd(7, 0, [(i, 1.0) for i in range(30)] + [(31, 9.0), (-1, 9.0)]))
+    assert np.isnan(partial[30]) and np.count_nonzero(np.isnan(partial)) == 1
+
+
 def test_subscription_pushes_to_buffer_and_swallows_errors(fake_sdk, caplog):
     channel = DdsChannel.create(domain_id=0, namespace="igris_c_x", sdk=fake_sdk)
     buffer = StampedRingBuffer(8)
@@ -219,6 +255,19 @@ def test_start_state_subscriptions_only_for_needed_fields(fake_sdk):
     assert set(fake_sdk.registry) == {"LowStateSubscriber", "HandCmdSubscriber"}
     fake_sdk.registry["HandCmdSubscriber"][0].callback(_HandCmd([(i, 0.5) for i in (11, 12, 13, 14, 15, 16, 21, 22, 23, 24, 25, 26)]))
     assert len(buffers.hand_command) == 1 and len(buffers.actual) == 0
+    for sub in subs:
+        sub.stop()
+    channel.release()
+
+
+def test_reference_from_lowcmd_subscribes_lowcmd_into_the_reference_buffer(fake_sdk):
+    channel = DdsChannel.create(domain_id=0, namespace="igris_c_x", sdk=fake_sdk)
+    buffers = DdsStateBuffers()
+    subs = start_state_subscriptions(channel, DdsStateTopics(lowcmd="rt/lowcmd"), buffers, needed={REFERENCE_LOWCMD_KEY})
+    assert [s.type_name for s in subs] == ["LowCmd"] and subs[0].topic == "rt/lowcmd"
+    assert set(fake_sdk.registry) == {"LowCmdSubscriber"}  # no MasterArmState subscription
+    fake_sdk.registry["LowCmdSubscriber"][0].callback(_LowCmd(3, 0, [(i, 0.5) for i in range(31)]))
+    assert len(buffers.reference) == 1
     for sub in subs:
         sub.stop()
     channel.release()

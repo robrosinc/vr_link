@@ -23,6 +23,11 @@ def test_packaged_defaults_load(kind):
         assert cfg.calibration.yaml_path == config.data_path("calibration/igris_c_eyes_stereo_unreal.yaml")
         assert cfg.signals.source is SourceKind.ROBOT and cfg.needs_dds()
         assert cfg.tolerances.actual_ms == 5.0 and cfg.tolerances.reference_ms == 15.0
+    # Every packaged config shows the inference node's final command as body_reference (2026-10-21).
+    assert cfg.robot_state.reference == "dds" and cfg.robot_state.reference_topic == "lowcmd"
+    assert cfg.dds.topics.lowcmd == "lowcmd" and "reference_lowcmd" in cfg.robot_state.dds_subscriptions()
+    if kind == "dds":
+        assert cfg.robot_state.dds_subscriptions() == {"actual", "reference_lowcmd", "hand_actual", "hand_command"}
     assert cfg.dds.domain_id == 0
 
 
@@ -34,6 +39,22 @@ def test_dds_fields_and_topics(tmp_path):
     cfg = config.load_pump_config(path, "usb")
     assert cfg.needs_dds() and cfg.dds.namespace == ""
     assert cfg.dds.topics.lowstate == "rt_low" and cfg.dds.topics.refstate == "gmr/refstate"
+
+
+def test_reference_topic_parses_and_names_its_topic(tmp_path):
+    path = tmp_path / "s.yaml"
+    path.write_text("robot_state: {reference: dds, reference_topic: lowcmd}\n", encoding="utf-8")
+    cfg = config.load_pump_config(path, "usb")
+    assert cfg.robot_state.reference == "dds" and cfg.robot_state.dds_fields() == {"reference"} and cfg.needs_dds()
+    assert cfg.robot_state.dds_subscriptions() == {"reference_lowcmd"} and cfg.dds.topics.lowcmd == "lowcmd"
+    path.write_text("robot_state: {reference: dds, reference_topic: lowcmd}\ndds: {topics: {lowcmd: rt/lowcmd}}\n", encoding="utf-8")
+    assert config.load_pump_config(path, "usb").dds.topics.lowcmd == "rt/lowcmd"
+    path.write_text("robot_state: {reference: dds}\n", encoding="utf-8")
+    assert config.load_pump_config(path, "usb").robot_state.dds_subscriptions() == {"reference"}  # default refstate
+    for text in ("robot_state: {reference: lowcmd}\n", "robot_state: {reference: dds, reference_topic: handcmd}\n"):
+        path.write_text(text, encoding="utf-8")
+        with pytest.raises(config.ConfigError):
+            config.load_pump_config(path, "usb")
 
 
 def test_unknown_source_kind_is_rejected():
@@ -58,6 +79,19 @@ def test_packaged_mujoco_dds_config_loads():
     assert cfg.dds.camera_topic == "sensor/eyes_stereo/compressed" and cfg.dds.namespace == ""
     assert cfg.robot_state.dds_fields() == {"actual", "reference", "hand_actual", "hand_command"}
     assert cfg.robot_state.base_pose == "none"
+    assert cfg.robot_state.reference_topic == "lowcmd" and cfg.dds.topics.lowcmd == "lowcmd"
+
+
+def test_packaged_configs_read_the_reference_from_lowcmd():
+    # All five packaged configs show the inference node's final command (2026-10-21); the
+    # producer's gmr/refstate stays reachable with reference_topic: refstate.
+    for name, kind in (
+        ("stream_dds.yaml", "dds"), ("stream_dds_mujoco.yaml", "dds"), ("stream_dds_isaac.yaml", "dds"),
+        ("stream_usb.yaml", "usb"), ("stream_shm.yaml", "shm"),
+    ):
+        cfg = config.load_pump_config(config.packaged_path(f"configs/{name}"), kind)
+        assert cfg.robot_state.reference == "dds" and cfg.robot_state.reference_topic == "lowcmd", name
+        assert "reference_lowcmd" in cfg.robot_state.dds_subscriptions() and "reference" not in cfg.robot_state.dds_subscriptions(), name
 
 
 def test_relative_paths_resolve_against_the_config_file(tmp_path):

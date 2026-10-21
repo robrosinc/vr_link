@@ -58,7 +58,7 @@ class DdsRuntime:
             actual=StampedRingBuffer(cap, name="actual"), reference=StampedRingBuffer(cap, name="reference"),
             hand_actual=StampedRingBuffer(cap, name="hand_actual"), hand_command=StampedRingBuffer(cap, name="hand_command"),
         )
-        self.subscriptions = start_state_subscriptions(self.channel, cfg.dds.topics, self.buffers, needed=cfg.robot_state.dds_fields())
+        self.subscriptions = start_state_subscriptions(self.channel, cfg.dds.topics, self.buffers, needed=cfg.robot_state.dds_subscriptions())
         # Signals.recording from the recorder's recording/state topic, Signals.converging /
         # arm_hold_* from the teleop producer's teleop/motion_feedback topic (messages.teleop_dds).
         self.recording_state = None

@@ -6,6 +6,8 @@
 # CompressedImage_ on <ns>/sensor/eyes_stereo/compressed, frame_id "stereo_image",
 # header.stamp = acquisition time. dds.domain_id, namespace and topic_naming must equal
 # the robot's robot.yaml igris_c.network.* values (the camera reads the same keys).
+# body_reference comes from the inference node's lowcmd (robot_state.reference_topic: lowcmd), so the
+# headset overlay shows the final policy command, not the producer's retargeted pose.
 
 eyes_stereo:
   resolution: [1280, 480]   # frames are resized to this SBS size before encoding; must match the served calibration's mode
@@ -47,12 +49,14 @@ dds:
   config_uri: ""            # CycloneDDS XML path/URI; empty honours $CYCLONEDDS_URI / defaults
   camera_topic: "sensor/eyes_stereo/compressed"   # bare name; the channel prefixes the namespace
   frame_id: ""              # drop samples whose header.frame_id differs (empty = accept all; the camera sends "stereo_image")
-  topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate}
+  topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate, lowcmd: lowcmd}
   buffer_capacity: 512
 
 robot_state:
-  actual: dds
+  actual: dds               # LowState.joint_state (31)
   reference: dds
+  reference_topic: lowcmd   # body_reference = dds.topics.lowcmd, the inference node's LowCmd motors[*].q (final policy
+                            # command, ~300 Hz); refstate = the producer's retargeted gmr/refstate (needs --ref_dds_topic)
   hand_actual: dds
   hand_command: dds
   base_pose: none

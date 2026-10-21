@@ -37,12 +37,14 @@ dds:
   config_uri: ""            # CycloneDDS XML path/URI; empty honours $CYCLONEDDS_URI / defaults
   camera_topic: "sensor/eyes_stereo/compressed"   # bare name; the channel prefixes the namespace
   frame_id: "" 
-  topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate}
+  topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate, lowcmd: lowcmd}
   buffer_capacity: 512
 
 robot_state:
   actual: dds               # bridge_sim lowstate (needs the MuJoCo simulation un-paused)
-  reference: dds            # gmr/refstate from igris_c_gmr; invalid when it is not running
+  reference: dds
+  reference_topic: lowcmd   # the inference node's LowCmd (final policy command); invalid when it is not running.
+                            # refstate = the producer's retargeted gmr/refstate instead (needs --ref_dds_topic)
   hand_actual: dds
   hand_command: dds         # handcmd from igris_c_gmr; invalid when it is not running
   base_pose: none           # SHM lane only

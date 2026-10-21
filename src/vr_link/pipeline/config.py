@@ -11,11 +11,11 @@ and adds the robot-state sources::
                   ideal: {model: pinhole|fisheye_equidistant, fovy_deg, focal_px, cx, cy,
                           toe_out_deg, baseline_mm}}
     dds:         {domain_id, namespace, topic_naming, config_uri, camera_topic, frame_id,
-                  topics: {lowstate, handstate, handcmd, refstate, recording_state, motion_feedback},
+                  topics: {lowstate, handstate, handcmd, refstate, lowcmd, recording_state, motion_feedback},
                   buffer_capacity}
     shm:         {shm_name, read_timeout_sec}
-    robot_state: {actual, reference, hand_actual, hand_command, base_pose,
-                  tolerances_ms: {actual, reference, hand_actual, hand_command}}
+    robot_state: {actual, reference, reference_topic: refstate|lowcmd, hand_actual, hand_command,
+                  base_pose, tolerances_ms: {actual, reference, hand_actual, hand_command}}
     signals:     {source, recording: shm|dds|none, motion_feedback: dds|none}
 
 Paths inside a file resolve against the file's own directory. Two prefixes
@@ -373,6 +373,7 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
             handstate=str(topics_raw.get("handstate", "handstate")),
             handcmd=str(topics_raw.get("handcmd", "handcmd")),
             refstate=str(topics_raw.get("refstate", "gmr/refstate")),
+            lowcmd=str(topics_raw.get("lowcmd", DdsStateTopics.lowcmd)),
             recording_state=str(topics_raw.get("recording_state", DdsStateTopics.recording_state)),
             motion_feedback=str(topics_raw.get("motion_feedback", DdsStateTopics.motion_feedback)),
         ),
@@ -405,6 +406,7 @@ def build_pump_config(data: Mapping[str, Any], source_kind: str, *, config_path:
             hand_actual=str(robot.get("hand_actual", "none")),
             hand_command=str(robot.get("hand_command", "none")),
             base_pose=str(robot.get("base_pose", "none")),
+            reference_topic=str(robot.get("reference_topic", RobotStateSpec.reference_topic)),
         ).validate()
         signals_spec = SignalsSpec(
             source=SourceKind.parse(str(signals_raw.get("source", "unknown"))),

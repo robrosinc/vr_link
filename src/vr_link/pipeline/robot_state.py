@@ -10,6 +10,11 @@ Each field of :class:`RobotStateSample` can come from a different place:
   (:class:`~vr_link.sources.ShmRobotBlock`), already exact;
 * ``none`` never sent.
 
+The ``reference`` group has a second axis, ``reference_topic``: which DDS
+topic/type feeds it when its source is ``dds``. ``refstate`` is the producer's
+retargeted ``gmr/refstate`` (``MasterArmState_``), ``lowcmd`` the inference
+node's final joint command (``LowCmd_``). Both name a key of ``dds.topics``.
+
 The defaults reproduce what the headset matched itself in 1.x: LowState
 within 5 ms, the gmr reference within 15 ms, hand state within 40 ms.
 """
@@ -24,6 +29,7 @@ import numpy as np
 
 from ..messages.robot_state import BODY_JOINT_COUNT, HAND_MOTOR_COUNT, RobotStateSample, StampedVector
 from ..messages.signals import SignalsSample, SourceKind
+from ..network.dds.subscribers import REFERENCE_LOWCMD_KEY
 from ..sources import ShmRobotBlock
 from ..utils.clocks import ms_to_ns
 from ..utils.time_sync import MatchStats, StampedRingBuffer
@@ -31,8 +37,10 @@ from ..utils.time_sync import MatchStats, StampedRingBuffer
 logger = logging.getLogger(__name__)
 
 FieldSource = Literal["dds", "shm", "none"]
+ReferenceTopic = Literal["refstate", "lowcmd"]
 DDS_FIELDS = ("actual", "reference", "hand_actual", "hand_command")
 SHM_FIELDS = ("actual", "hand_actual", "base_pose")
+REFERENCE_TOPICS = ("refstate", "lowcmd")
 
 
 @dataclass
@@ -44,6 +52,9 @@ class RobotStateSpec:
     hand_actual: FieldSource = "none"
     hand_command: FieldSource = "none"    # dds | none
     base_pose: FieldSource = "none"       # shm | none
+    # Which dds.topics entry feeds the reference group when reference == "dds":
+    # refstate (producer's retargeted MasterArmState_) or lowcmd (inference node's LowCmd_).
+    reference_topic: ReferenceTopic = "refstate"
 
     def validate(self) -> "RobotStateSpec":
         for name in ("actual", "reference", "hand_actual", "hand_command", "base_pose"):
@@ -54,10 +65,24 @@ class RobotStateSpec:
                 raise ValueError(f"robot_state.{name} cannot come from dds")
             if value == "shm" and name not in SHM_FIELDS:
                 raise ValueError(f"robot_state.{name} cannot come from shm")
+        if self.reference_topic not in REFERENCE_TOPICS:
+            raise ValueError(f"robot_state.reference_topic: unknown topic {self.reference_topic!r} (expected one of {REFERENCE_TOPICS})")
         return self
 
     def dds_fields(self) -> Set[str]:
+        """Field names filled from DDS; keys of the match stats and buffers."""
+
         return {name for name in DDS_FIELDS if getattr(self, name) == "dds"}
+
+    def dds_subscriptions(self) -> Set[str]:
+        """Subscription keys for ``start_state_subscriptions``: the field names, with the reference
+        group spelled ``reference_lowcmd`` when ``reference_topic`` is ``lowcmd``."""
+
+        keys = self.dds_fields()
+        if "reference" in keys and self.reference_topic == "lowcmd":
+            keys.discard("reference")
+            keys.add(REFERENCE_LOWCMD_KEY)
+        return keys
 
     def uses_shm(self) -> bool:
         return any(getattr(self, name) == "shm" for name in SHM_FIELDS)

@@ -35,20 +35,22 @@ shm:
   shm_name: "/igris_c_mujoco_vision_shm"
   read_timeout_sec: 1.0     # wait for a new frame before re-checking the segment
 
-# The operator's reference joints and hand command come from the igris_c_gmr
-# producer over DDS (igris_c_sdk wheel from the host env, e.g. igris_c_gmr
-# `pixi run install-sdk`). Without them
-# the headset's hand-target overlay stays hidden (it needs body_reference).
+# The reference joints (the inference node's lowcmd) and the hand command (the
+# igris_c_gmr producer's handcmd) come over DDS (igris_c_sdk wheel from the host
+# env, e.g. igris_c_gmr `pixi run install-sdk`). Without them the headset's
+# hand-target overlay stays hidden (it needs body_reference).
 # Set reference/hand_command to none to run without the SDK.
 dds:
   domain_id: 0              # igris_c_gmr producer default (--dds_domain_id)
   namespace: ""             # REQUIRED: the producer's --dds_namespace (or --dds-namespace on the CLI)
   topic_naming: native      # must match the producer's --dds_topic_naming
-  topics: {refstate: gmr/refstate, handcmd: handcmd}
+  topics: {refstate: gmr/refstate, lowcmd: lowcmd, handcmd: handcmd}
 
 robot_state:
   actual: shm               # from the v3 segment (invalid with a v1/v2 producer)
-  reference: dds            # gmr/refstate -> overlay target hand
+  reference: dds
+  reference_topic: lowcmd   # the inference node's LowCmd (final policy command) -> overlay target hand;
+                            # refstate = the producer's retargeted gmr/refstate instead (needs --ref_dds_topic)
   hand_actual: shm          # MuJoCo does not write it yet (invalid)
   hand_command: dds         # handcmd -> overlay ghost fingers
   base_pose: shm

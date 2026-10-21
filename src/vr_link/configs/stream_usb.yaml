@@ -41,12 +41,14 @@ dds:
   namespace: ""             # REQUIRED: the robot's namespace (or --dds-namespace)
   topic_naming: native      # native | ros_compatible (must match the robot bridge)
   config_uri: ""            # CycloneDDS XML path/URI; empty honours $CYCLONEDDS_URI
-  topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate}
+  topics: {lowstate: lowstate, handstate: handstate, handcmd: handcmd, refstate: gmr/refstate, lowcmd: lowcmd}
   buffer_capacity: 512
 
 robot_state:
   actual: dds               # LowState.joint_state (31)
-  reference: dds            # gmr/refstate from the igris_c_gmr producer (31)
+  reference: dds
+  reference_topic: lowcmd   # the inference node's LowCmd (final policy command, 31); refstate = the producer's
+                            # retargeted gmr/refstate instead (needs --ref_dds_topic)
   hand_actual: dds          # HandState (12)
   hand_command: dds         # handcmd from the igris_c_gmr producer (12)
   base_pose: none           # no base estimate on the real robot
