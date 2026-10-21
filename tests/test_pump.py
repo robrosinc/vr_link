@@ -169,7 +169,7 @@ def test_pump_sends_a_state_heartbeat_while_the_source_has_no_frames():
 
     def signals_now():
         ticks.append(1)
-        return SignalsSample(source=SourceKind.ROBOT, converging=True, converge_progress=0.3)
+        return SignalsSample(source=SourceKind.ROBOT, converging=True, arm_hold_left=True)
 
     pump = StreamPump(source, server, encoder_cfg=_encoder_cfg(), read_timeout=1.0,
                       robot_state_now=lambda wall_ns: RobotStateSample(body_actual=vector(np.zeros(31, dtype=np.float32), wall_ns)),
@@ -185,7 +185,8 @@ def test_pump_sends_a_state_heartbeat_while_the_source_has_no_frames():
             assert (sig_env.kind, state_env.kind) == (MessageKind.SIGNALS, MessageKind.ROBOT_STATE)
             assert sig_env.seq + 1 == state_env.seq and sig_env.wall_ns == state_env.wall_ns and sig_env.sim_ns == 0
             sig = decode_signals(sig_env)
-            assert sig.converging and sig.converge_progress == pytest.approx(0.3) and sig.source is SourceKind.ROBOT
+            assert sig.converging and sig.arm_hold_left and sig.source is SourceKind.ROBOT
+            assert sig.converge_progress == 0.0  # deprecated field, always 0 on the wire
             assert decode_robot_state(state_env).body_actual is not None
             t0 = time.monotonic()
             client.next(); client.next()  # a second heartbeat arrives on its own

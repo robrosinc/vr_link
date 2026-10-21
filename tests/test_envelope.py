@@ -82,9 +82,25 @@ def test_signals_carry_the_producer_feedback_and_default_idle():
     full = SignalsSample(True, SourceKind.ROBOT, converging=True, converge_progress=0.5, arm_hold_left=True, arm_hold_right=False)
     env = parse_envelope(build_signals_payload(full, seq=1, wall_ns=2))
     decoded = decode_signals(env)
-    assert decoded.converging and decoded.converge_progress == pytest.approx(0.5)
+    assert decoded.converging and decoded.converge_progress == 0.0  # deprecated: never encoded, always 0 on the wire
     assert decoded.arm_hold_left and not decoded.arm_hold_right and decoded.recording and decoded.source is SourceKind.ROBOT
     idle = decode_signals(parse_envelope(build_signals_payload(SignalsSample(), seq=1, wall_ns=2)))
     assert idle == SignalsSample()
-    clamped = decode_signals(parse_envelope(build_signals_payload(SignalsSample(converge_progress=7.0), seq=1, wall_ns=2)))
-    assert clamped.converge_progress == 1.0
+
+
+def test_signals_decoder_still_reads_progress_from_an_old_sender():
+    # A pre-2026-10-21 sender wrote converge_progress; the field is deprecated, not removed,
+    # so the decoder keeps reading it (receivers ignore the value).
+    import flatbuffers
+    import vr_link_generated as fb
+
+    from vr_link.messages.envelope import finish_envelope
+
+    builder = flatbuffers.Builder(64)
+    fb.SignalsStart(builder)
+    fb.SignalsAddConverging(builder, True)
+    fb.SignalsAddConvergeProgress(builder, 0.5)
+    body = fb.SignalsEnd(builder)
+    env = parse_envelope(finish_envelope(builder, body, fb.Message.Signals, seq=1, wall_ns=2, sim_ns=0))
+    decoded = decode_signals(env)
+    assert decoded.converging and decoded.converge_progress == pytest.approx(0.5)

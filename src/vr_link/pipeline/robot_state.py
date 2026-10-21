@@ -223,8 +223,9 @@ class SignalsProvider:
     (:class:`~vr_link.network.dds.teleop.RecordingStateSubscriber`); a sample
     older than ``max_age_s`` reads as not recording, so a recorder that went
     away does not leave the HUD showing a stale "recording". ``motion_feedback: dds``
-    fills ``converging``/``converge_progress``/``arm_hold_*`` from the newest
-    ``teleop/motion_feedback`` sample the same way (stale reads as idle).
+    fills ``converging``/``arm_hold_*`` from the newest ``teleop/motion_feedback``
+    sample the same way (stale reads as idle). The producer's ``converge_progress``
+    is deprecated and not forwarded (``Signals.converge_progress`` is always 0).
     """
 
     def __init__(
@@ -252,17 +253,15 @@ class SignalsProvider:
             recording = bool(shm_block.recording)
         elif self.spec.recording == "dds":
             recording = bool(self.recording_state.recording(self.max_age_s))
-        converging, progress, hold_left, hold_right = False, 0.0, False, False
+        converging, hold_left, hold_right = False, False, False
         if self.spec.motion_feedback == "dds":
             feedback = self.motion_feedback.state(self.motion_feedback_max_age_s)
             converging = bool(feedback.converging)
-            progress = float(feedback.converge_progress) if converging else 0.0
             hold_left, hold_right = bool(feedback.arm_hold_left), bool(feedback.arm_hold_right)
         return SignalsSample(
             recording=recording,
             source=self.spec.source,
             converging=converging,
-            converge_progress=progress,
             arm_hold_left=hold_left,
             arm_hold_right=hold_right,
         )

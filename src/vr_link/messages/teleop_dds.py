@@ -11,10 +11,12 @@ Three bare topics (the SDK ``ChannelFactory`` prefixes the namespace):
   downlink. Only the recorder knows this; the HUD must show the recorder's
   truth, not a count of button presses.
 * ``teleop/motion_feedback`` (producer -> HUD, 2.1): the teleop producer's reference
-  shaping state (convergence ramp active + progress, per-arm hold while the
-  operator's bare hand is untracked), read by ``vr-link-stream`` for the
+  shaping state (convergence ramp active, per-arm hold while the operator's
+  bare hand is untracked), read by ``vr-link-stream`` for the
   ``Signals.converging`` / ``arm_hold_*`` fields. Published every producer
   tick while the skeleton is connected; the HUD reads a stale sample as idle.
+  The ``converge_progress`` axis is deprecated (2026-10-21): the layout keeps
+  it so the tag does not change, but ``vr-link-stream`` no longer forwards it.
 
 ``Joy_`` (vendored ``sensor_msgs/Joy``: ``header``, ``axes[]`` float32,
 ``buttons[]`` int32) is reused so no SDK/IDL change is needed; the index layout
@@ -101,7 +103,7 @@ class MotionFeedbackSample:
     """One ``teleop/motion_feedback`` message (teleop producer reference-shaping state)."""
 
     converging: bool = False
-    converge_progress: float = 1.0
+    converge_progress: float = 1.0  # deprecated: still carried on the topic, ignored by the downlink
     arm_hold_left: bool = False
     arm_hold_right: bool = False
     stamp_ns: int = 0

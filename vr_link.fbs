@@ -224,9 +224,15 @@ table Signals {
 
   // Teleop producer feedback (2.1): the robot-side reference is converging
   // from the robot's measured pose to the operator's pose (after Start/Resume
-  // or a low-level mode entry); progress 0..1. False/0 while idle or when the
-  // producer does not report.
+  // or a low-level mode entry). False while idle or when the producer does
+  // not report. HUD contract (2026-10-21): show a "converging" indicator while
+  // true; when it drops to false remove the indicator and return to the
+  // normal teleop-state display. No percentage is shown.
   converging: bool = false;
+  // Deprecated (2026-10-21): the ramp has no fixed duration any more, so a
+  // time-based 0..1 progress means nothing. Senders write 0, receivers ignore
+  // it. Kept (not flatc-deprecated) so the generated bindings and the headset
+  // build stay unchanged; wire layout is identical.
   converge_progress: float = 0.0;
   // The producer holds the robot arm at its last pose because the operator's
   // bare hand is not tracked (no controller, hand occluded). Per side.

@@ -257,8 +257,9 @@ def test_motion_feedback_subscriber_reports_stale_as_idle_and_feeds_signals(fake
     assert not idle.converging and idle.converge_progress == 0.0 and not idle.arm_hold_left and not idle.arm_hold_right
     publisher.publish(MotionFeedbackSample(converging=True, converge_progress=0.6, arm_hold_right=True))
     sample = provider.sample(None)
-    assert sample.converging and sample.converge_progress == pytest.approx(0.6) and sample.arm_hold_right and sample.source is SourceKind.ROBOT
+    assert sample.converging and sample.arm_hold_right and sample.source is SourceKind.ROBOT
+    assert sample.converge_progress == 0.0  # deprecated: the producer's progress is not forwarded to the headset
     publisher.publish(MotionFeedbackSample(converging=False, converge_progress=1.0))
-    assert provider.sample(None).converge_progress == 0.0  # progress is reported only while converging
+    assert not provider.sample(None).converging and provider.sample(None).converge_progress == 0.0
     with pytest.raises(ValueError):
         SignalsSpec(motion_feedback="pipe").validate()
